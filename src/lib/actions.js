@@ -1,0 +1,169 @@
+import {
+  addDoc,
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
+import { db } from "../firebase";
+import { MIN } from "./helpers";
+
+// ---- Profile & status ----
+
+export function setStatus(uid, { free, zone, minutes }) {
+  return updateDoc(doc(db, "users", uid), {
+    status: free
+      ? { free: true, zone: zone || "", until: Date.now() + minutes * MIN }
+      : { free: false, zone: "", until: 0 },
+  });
+}
+
+export function updateProfile(uid, fields) {
+  return updateDoc(doc(db, "users", uid), fields);
+}
+
+export function toggleFavorite(uid, itemId, isFav) {
+  return updateDoc(doc(db, "users", uid), {
+    favorites: isFav ? arrayRemove(itemId) : arrayUnion(itemId),
+  });
+}
+
+// ---- Follow & friends ----
+
+export function toggleFollow(uid, targetId, isFollowing) {
+  return updateDoc(doc(db, "users", uid), {
+    following: isFollowing ? arrayRemove(targetId) : arrayUnion(targetId),
+  });
+}
+
+export function sendFriendRequest(fromId, toId) {
+  return addDoc(collection(db, "friendRequests"), { fromId, toId, createdAt: Date.now() });
+}
+
+// Also used for declining
+export function cancelFriendRequest(requestId) {
+  return deleteDoc(doc(db, "friendRequests", requestId));
+}
+
+export function acceptFriendRequest(request) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", request.fromId), { friends: arrayUnion(request.toId) });
+  batch.update(doc(db, "users", request.toId), { friends: arrayUnion(request.fromId) });
+  batch.delete(doc(db, "friendRequests", request.id));
+  return batch.commit();
+}
+
+export function removeFriend(a, b) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "users", a), { friends: arrayRemove(b) });
+  batch.update(doc(db, "users", b), { friends: arrayRemove(a) });
+  return batch.commit();
+}
+
+// ---- Invites ----
+// Urgent invites expire 15 min after the meet time. Planned ones expire 1 hr after.
+// Expiry is the default way an invite goes away, so nobody has to "unsend".
+
+const URGENCY_MINUTES = { now: 0, 10: 10, 20: 20 };
+
+export function sendInvite({ fromId, toIds, itemId, urgency, plannedFor, note, visibility }) {
+  const now = Date.now();
+  const meetAt = urgency === "planned" ? plannedFor : now + URGENCY_MINUTES[urgency] * MIN;
+  const expiresAt = urgency === "planned" ? meetAt + 60 * MIN : meetAt + 15 * MIN;
+  return addDoc(collection(db, "invites"), {
+    fromId,
+    toIds,
+    itemId: itemId || null,
+    urgency,
+    meetAt,
+    expiresAt,
+    note: note || "",
+    visibility: visibility || "friends",
+    responses: {},
+    status: "open",
+    createdAt: now,
+  });
+}
+
+export function respondToInvite(inviteId, uid, response) {
+  return updateDoc(doc(db, "invites", inviteId), { [`responses.${uid}`]: response });
+}
+
+export function joinOpenTable(inviteId, uid) {
+  return updateDoc(doc(db, "invites", inviteId), { [`responses.${uid}`]: "down" });
+}
+
+export function cancelInvite(inviteId) {
+  return updateDoc(doc(db, "invites", inviteId), { status: "cancelled" });
+}
+
+export function setInviteItem(inviteId, itemId) {
+  return updateDoc(doc(db, "invites", inviteId), { itemId: itemId || null });
+}
+
+// ---- Meals & collaborative reviews ----
+// The draft lives on the invite until the inviter publishes it.
+
+export function startMeal(inviteId) {
+  return updateDoc(doc(db, "invites", inviteId), { status: "eating", ateAt: Date.now() });
+}
+
+export function saveDraftPart(inviteId, uid, text) {
+  return updateDoc(doc(db, "invites", inviteId), { [`draft.parts.${uid}`]: text });
+}
+
+export function saveDraftPhoto(inviteId, photo) {
+  return updateDoc(doc(db, "invites", inviteId), { "draft.photo": photo });
+}
+
+export async function publishMealReview(invite, parts) {
+  const authorIds = Object.keys(parts)
+    .filter((id) => parts[id]?.trim())
+    .sort((a, b) => (a === invite.fromId ? -1 : b === invite.fromId ? 1 : 0));
+
+  const ref = await addDoc(collection(db, "reviews"), {
+    itemId: invite.itemId,
+    inviteId: invite.id,
+    ownerId: invite.fromId,
+    authorIds,
+    parts: Object.fromEntries(authorIds.map((id) => [id, parts[id].trim()])),
+    photo: invite.draft?.photo || "",
+    upvotes: [],
+    createdAt: Date.now(),
+  });
+
+  await updateDoc(doc(db, "invites", invite.id), {
+    status: "done",
+    doneAt: Date.now(),
+    reviewId: ref.id,
+  });
+}
+
+// The meal still counts even if nobody writes a review
+export function skipReview(inviteId) {
+  return updateDoc(doc(db, "invites", inviteId), { status: "done", doneAt: Date.now() });
+}
+
+// ---- Solo reviews ----
+
+export function postSoloReview({ uid, itemId, text, photo }) {
+  return addDoc(collection(db, "reviews"), {
+    itemId,
+    inviteId: null,
+    ownerId: uid,
+    authorIds: [uid],
+    parts: { [uid]: text },
+    photo: photo || "",
+    upvotes: [],
+    createdAt: Date.now(),
+  });
+}
+
+export function toggleUpvote(reviewId, uid, hasUpvoted) {
+  return updateDoc(doc(db, "reviews", reviewId), {
+    upvotes: hasUpvoted ? arrayRemove(uid) : arrayUnion(uid),
+  });
+}
