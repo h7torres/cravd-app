@@ -13,6 +13,7 @@ import {
   mutualFriends,
   participants,
   PREFS,
+  reviewKeywords,
   timeAgo,
   useNow,
 } from "../lib/helpers";
@@ -30,6 +31,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const now = useNow();
   const [editing, setEditing] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const user = usersById[userId];
   if (!user) {
@@ -46,6 +48,8 @@ export default function Profile() {
   const isMe = user.id === me.id;
   const isFriend = arr(me.friends).includes(user.id);
   const showPrivate = isMe || isFriend;
+  // Favorites can be made public from Edit profile; friends-only is the default
+  const showFavorites = showPrivate || user.visibility === "public";
 
   const userReviews = reviews
     .filter((r) => arr(r.authorIds).includes(user.id))
@@ -67,6 +71,9 @@ export default function Profile() {
     ? new Date(user.createdAt).toLocaleDateString([], { month: "short", year: "numeric" })
     : null;
   const sharedPrefs = isMe ? [] : arr(user.prefs).filter((p) => arr(me.prefs).includes(p));
+  const keywords = reviewKeywords(user.id, reviews, itemsById);
+  const photoReviews = userReviews.filter((r) => r.photo);
+  const visibleReviews = showAll ? userReviews : userReviews.slice(0, 3);
 
   return (
     <div className="stack">
@@ -89,6 +96,10 @@ export default function Profile() {
               </span>
             ))}
           </div>
+        )}
+
+        {keywords.length > 0 && (
+          <p className="small muted">Usually reviews: {keywords.join(", ")}</p>
         )}
 
         {!isMe && (
@@ -149,7 +160,7 @@ export default function Profile() {
         </div>
       )}
 
-      {showPrivate && (
+      {showFavorites && (
         <section className="stack">
           <h2>Favorites</h2>
           {favorites.length === 0 && <p className="muted small">No favorites yet.</p>}
@@ -190,12 +201,34 @@ export default function Profile() {
         </section>
       )}
 
+      {photoReviews.length > 0 && (
+        <section className="stack">
+          <h2>Photos</h2>
+          <div className="row wrap">
+            {photoReviews.slice(0, 6).map((r) => (
+              <Link key={r.id} to={`/items/${r.itemId}`}>
+                <img
+                  src={r.photo}
+                  alt={itemsById[r.itemId]?.name || "Review photo"}
+                  style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8 }}
+                />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="stack">
         <h2>Reviews</h2>
         {userReviews.length > 0 ? (
-          userReviews.map((r) => <ReviewCard key={r.id} review={r} now={now} />)
+          visibleReviews.map((r) => <ReviewCard key={r.id} review={r} now={now} />)
         ) : (
           <p className="muted small">No reviews yet.</p>
+        )}
+        {userReviews.length > 3 && (
+          <button className="btn-link" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? "Show fewer" : `See all ${userReviews.length} reviews`}
+          </button>
         )}
       </section>
 
@@ -214,6 +247,7 @@ function EditProfile({ me, onDone }) {
   const [bio, setBio] = useState(me.bio || "");
   const [prefs, setPrefs] = useState(arr(me.prefs));
   const [photoURL, setPhotoURL] = useState(me.photoURL || "");
+  const [visibility, setVisibility] = useState(me.visibility || "friends");
   const [saving, setSaving] = useState(false);
 
   async function handlePhoto(e) {
@@ -233,6 +267,7 @@ function EditProfile({ me, onDone }) {
       bio: bio.trim(),
       prefs,
       photoURL,
+      visibility,
     });
     onDone();
   }
@@ -269,6 +304,13 @@ function EditProfile({ me, onDone }) {
           ))}
         </div>
       </div>
+      <label className="stack small">
+        Who can see my favorites
+        <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+          <option value="friends">Friends only</option>
+          <option value="public">Everyone</option>
+        </select>
+      </label>
       <div className="row">
         <button className="btn btn-primary" disabled={saving} onClick={save}>
           {saving ? "Saving…" : "Save"}
