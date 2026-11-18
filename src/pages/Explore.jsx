@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { arr, canSeeInvite, isLive, joinNames, sharedTags, useNow } from "../lib/helpers";
 import DishThumb from "../components/DishThumb";
 import InviteCard from "../components/InviteCard";
 import ReviewCard from "../components/ReviewCard";
+import SendToFriendSheet from "../components/SendToFriendSheet";
 
 // The slow lane: public reviews with friend signals, dishes, search, filters, open tables.
 export default function Explore() {
@@ -161,14 +162,20 @@ export default function Explore() {
 }
 
 function DishCard({ item, fans, me }) {
+  const navigate = useNavigate();
+  const [shareOpen, setShareOpen] = useState(false);
   const matches = sharedTags(item, me);
   return (
-    <Link to={`/items/${item.id}`} className="card dish-card">
+    <div className="card dish-card">
+      <Link to={`/items/${item.id}`} className="dish-card-link">
       <DishThumb item={item} wide />
       <strong>{item.name}</strong>
       <span className="muted small">{item.diningHall}</span>
       {fans.length > 0 && <span className="signal">♥ {joinNames(fans.map((f) => f.name))}</span>}
       {matches.length > 0 && <span className="muted small">Your taste: {matches.join(", ")}</span>}
-    </Link>
+      </Link>
+      <button className="btn btn-small" onClick={() => setShareOpen(true)}>Send to a friend</button>
+      {shareOpen && <SendToFriendSheet item={item} onClose={() => setShareOpen(false)} onSent={(threadId) => { navigate(`/messages/${threadId}`); }} />}
+    </div>
   );
 }

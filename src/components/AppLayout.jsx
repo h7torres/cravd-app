@@ -3,6 +3,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 import { useData } from "../context/DataContext";
 import NavBar from "./NavBar";
+import MessagesIcon from "./MessagesIcon";
 
 export default function AppLayout() {
   const { currentUserId, logout } = useUser();
@@ -28,6 +29,7 @@ export default function AppLayout() {
 
   return (
     <div className="app-shell">
+      <header className="top-actions"><MessagesIcon /></header>
       <main className="page">
         <Outlet />
       </main>
