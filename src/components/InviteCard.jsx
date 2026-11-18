@@ -1,15 +1,11 @@
 import { Link } from "react-router-dom";
 import { useData } from "../context/DataContext";
-import { cancelInvite, joinOpenTable, respondToInvite } from "../lib/actions";
+import { cancelInvite, joinOpenTable } from "../lib/actions";
 import { arr, downIds, isFree, joinNames, timeLeft, whenLabel } from "../lib/helpers";
 import Avatar from "./Avatar";
 import DishThumb from "./DishThumb";
+import { InviteReplyControls } from "./InviteMessageCard";
 
-const RESPONSES = [
-  ["down", "I'm down"],
-  ["maybe", "Maybe"],
-  ["cant", "Can't"],
-];
 const LABEL = { down: "is down", maybe: "maybe", cant: "can't" };
 const VISIBILITY = { friends: "", followers: "Followers can join", anyone: "Open table" };
 
@@ -58,19 +54,7 @@ export default function InviteCard({ invite, now, mode }) {
       {invite.note && <p>“{invite.note}”</p>}
       {answered.length > 0 && <p className="muted small">{answered.join(" · ")}</p>}
 
-      {mode === "incoming" && (
-        <div className="row">
-          {RESPONSES.map(([key, label]) => (
-            <button
-              key={key}
-              className={`btn btn-small ${mine === key ? "btn-on" : ""}`}
-              onClick={() => respondToInvite(invite.id, me.id, key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {mode === "incoming" && <InviteReplyControls invite={invite} now={now} />}
 
       {mode === "outgoing" && (
         <div className="row">

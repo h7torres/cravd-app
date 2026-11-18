@@ -10,6 +10,8 @@ import Profile from "./pages/Profile";
 import Blend from "./pages/Blend";
 import Meal from "./pages/Meal";
 import NotFound from "./pages/NotFound";
+import Messages from "./pages/Messages";
+import Thread from "./pages/Thread";
 
 export default function App() {
   return (
@@ -21,6 +23,8 @@ export default function App() {
         <Route path="/items/:itemId" element={<ItemDetail />} />
         <Route path="/invite/new" element={<NewInvite />} />
         <Route path="/friends" element={<Friends />} />
+        <Route path="/messages" element={<Messages />} />
+        <Route path="/messages/:threadId" element={<Thread />} />
         <Route path="/profile/:userId" element={<Profile />} />
         <Route path="/blend" element={<Blend />} />
         <Route path="/meal/:inviteId" element={<Meal />} />

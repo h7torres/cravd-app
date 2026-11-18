@@ -1,11 +1,16 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { toggleUpvote } from "../lib/actions";
 import { arr, joinNames, sharedTags, timeAgo } from "../lib/helpers";
 import Avatar from "./Avatar";
 import DishThumb from "./DishThumb";
+import SendToFriendSheet from "./SendToFriendSheet";
 
 export default function ReviewCard({ review, now, showDish = true }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  const navigate = useNavigate();
   const { me, usersById, itemsById } = useData();
   const item = itemsById[review.itemId];
   const authorIds = arr(review.authorIds);
@@ -30,6 +35,7 @@ export default function ReviewCard({ review, now, showDish = true }) {
 
   return (
     <article className="card review">
+      {shareOpen && item && <SendToFriendSheet item={item} onClose={() => setShareOpen(false)} onSent={(threadId) => navigate(`/messages/${threadId}`)} />}
       {showDish && item && (
         <Link to={`/items/${item.id}`} className="review-dish">
           <DishThumb item={item} size={40} />
@@ -71,7 +77,8 @@ export default function ReviewCard({ review, now, showDish = true }) {
 
       <div className="row between wrap">
         <span className="muted small">{timeAgo(review.createdAt, now)}</span>
-        <div className="row">
+        <div className="row wrap">
+          {item && <button className="btn btn-small" onClick={() => setShareOpen(true)}>Send to a friend</button>}
           {inviteTargets.length > 0 && item && (
             <Link
               className="btn btn-small btn-primary"

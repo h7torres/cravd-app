@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { postSoloReview, toggleFavorite } from "../lib/actions";
 import { arr, compressImage, joinNames, sharedTags, useNow } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 import DishThumb from "../components/DishThumb";
 import ReviewCard from "../components/ReviewCard";
+import SendToFriendSheet from "../components/SendToFriendSheet";
 
 export default function ItemDetail() {
   const { itemId } = useParams();
+  const navigate = useNavigate();
+  const [shareOpen, setShareOpen] = useState(false);
   const { me, users, usersById, itemsById, reviews } = useData();
   const now = useNow();
   const [text, setText] = useState("");
@@ -61,6 +64,7 @@ export default function ItemDetail() {
 
   return (
     <div className="stack">
+      {shareOpen && <SendToFriendSheet item={item} onClose={() => setShareOpen(false)} onSent={(threadId) => navigate(`/messages/${threadId}`)} />}
       <DishThumb item={item} wide />
       <div>
         <h1 style={{ marginBottom: 2 }}>{item.name}</h1>
@@ -112,6 +116,7 @@ export default function ItemDetail() {
           </p>
         ))}
 
+        <button className="btn btn-block" onClick={() => setShareOpen(true)}>Send to a friend</button>
         <Link className="btn btn-primary btn-block" to={inviteHref}>
           {friendFans.length
             ? `Invite ${joinNames(friendFans.map((f) => f.name))} to try this`

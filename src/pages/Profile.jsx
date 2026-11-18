@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { useUser } from "../context/UserContext";
 import { removeFriend, updateProfile } from "../lib/actions";
+import { threadIdFor } from "../lib/messages";
 import {
   arr,
   clockTime,
@@ -116,6 +117,7 @@ export default function Profile() {
           )}
           {together.length > 0 && <p className="small">You've eaten together {plural(together.length, "time")}.</p>}
           <div className="row wrap">
+            <Link className="btn" to={`/messages/${threadIdFor(me.id, user.id)}`}>Message</Link>
             <Link className="btn btn-primary" to={`/invite/new?to=${user.id}`}>
               Invite {user.name}
             </Link>
