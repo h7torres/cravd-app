@@ -1,0 +1,21 @@
+/* Friends + Explore updates (Phase 3) */
+.friends-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+.friends-tabs .chip { flex-shrink: 0; }
+.relationship-actions { justify-content: flex-end; flex-wrap: wrap; }
+.relationship-actions .btn { padding: 6px 9px; font-size: 12px; }
+.explore-filters { padding: 12px 14px; }
+.explore-filters summary { font-weight: 600; cursor: pointer; }
+.explore-filter-body { padding-top: 12px; }
+.explore-filter-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.explore-filter-selects label { display: flex; flex-direction: column; gap: 5px; }
+.explore-filter-selects select { min-width: 0; width: 100%; }
+.explore-results-heading { gap: 8px; }
+.explore-results-heading .tabs { margin-top: 0; }
+.explore-results-heading select { max-width: 170px; font-size: 12px; }
+.explore-reel { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+.explore-reel .dish-reel-card { flex: 0 0 185px; scroll-snap-align: start; }
+@media (max-width: 380px) {
+  .explore-filter-selects { grid-template-columns: 1fr; }
+  .relationship-actions { max-width: 170px; }
+  .explore-results-heading select { max-width: 145px; }
+}
