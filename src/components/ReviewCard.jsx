@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { addComment, deleteComment, toggleUpvote } from "../lib/actions";
 import { arr, joinNames, sharedPrefs, timeAgo } from "../lib/helpers";
@@ -19,6 +19,17 @@ function ThumbIcon({ filled }) {
     </svg>
   );
 }
+
+function LineIcon({ d }) {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+const COMMENT_D = "M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z";
+const SHARE_D = "M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 7l-4-4-4 4M12 3v12";
 
 // A review is posted like a collab post: everyone who ate together is credited,
 // there's one photo, and each person's take is a caption. Like counts are hidden.
@@ -54,8 +65,12 @@ export default function ReviewCard({ review, now, showDish = true }) {
     .sort((a, b) => a.createdAt - b.createdAt);
   const visibleComments = showComments ? postComments : postComments.slice(-2);
 
+  // Which screen the post was on when someone invited from it (for the evaluation)
+  const { pathname } = useLocation();
+  const src =
+    pathname === "/" ? "friend_feed" : pathname.startsWith("/explore") ? "explore" : pathname.startsWith("/items") ? "dish_page" : "profile_post";
   const inviteUrl = (ids) =>
-    `/invite/new?item=${review.itemId}${ids.length ? `&to=${ids.join(",")}` : ""}`;
+    `/invite/new?item=${review.itemId}${ids.length ? `&to=${ids.join(",")}` : ""}&src=${src}`;
 
   async function submitComment(e) {
     e.preventDefault();
@@ -140,10 +155,10 @@ export default function ReviewCard({ review, now, showDish = true }) {
           <span className="like-label">Like</span>
         </button>
         <button type="button" className="icon-button" aria-label="Comments" onClick={() => setShowComments((v) => !v)}>
-          💬
+          <LineIcon d={COMMENT_D} />
         </button>
         <Link className="icon-button" aria-label="Share: invite someone to try this" to={inviteUrl([])}>
-          ↗
+          <LineIcon d={SHARE_D} />
         </Link>
         <span className="grow" />
         {friendTargets.length > 0 && (

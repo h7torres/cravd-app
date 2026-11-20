@@ -30,6 +30,8 @@ export default function Home() {
   const now = useNow();
   const [picked, setPicked] = useState([]);
   const [mode, setMode] = useState("group");
+  // Where the current selection came from: ticking active friends, or "Invite all"
+  const [pickSource, setPickSource] = useState("active");
   const [sending, setSending] = useState(false);
   const [sentMsg, setSentMsg] = useState("");
 
@@ -74,11 +76,13 @@ export default function Home() {
   // ---- Inviting ----
   function togglePick(id) {
     setSentMsg("");
+    if (picked.length === 0) setPickSource("active");
     setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   function inviteAll() {
     setSentMsg("");
+    setPickSource("invite_all");
     setPicked(friendIds.filter((id) => usersById[id]));
   }
 
@@ -88,11 +92,13 @@ export default function Home() {
     const names = joinNames(picked.map((id) => usersById[id]?.name).filter(Boolean));
     try {
       if (mode === "group" || picked.length === 1) {
-        await sendInvite({ fromId: me.id, toIds: picked, urgency, visibility: "friends" });
+        await sendInvite({ fromId: me.id, toIds: picked, urgency, visibility: "friends", source: pickSource, mode: picked.length > 1 ? "group" : "single" });
         setSentMsg(picked.length === 1 ? `Invite sent to ${names}.` : `Group invite sent to ${names}.`);
       } else {
         await Promise.all(
-          picked.map((id) => sendInvite({ fromId: me.id, toIds: [id], urgency, visibility: "friends" }))
+          picked.map((id) =>
+            sendInvite({ fromId: me.id, toIds: [id], urgency, visibility: "friends", source: pickSource, mode: "individual" })
+          )
         );
         setSentMsg(`${picked.length} separate invites sent to ${names}.`);
       }
@@ -109,7 +115,7 @@ export default function Home() {
 
   return (
     <div className="stack">
-      <h1>Hey {me.name}</h1>
+      <h1>Hungry, {me.name}?</h1>
 
       {/* ---- Active now ---- */}
       <section className="stack">
@@ -117,78 +123,81 @@ export default function Home() {
           <h2 style={{ margin: 0 }}>Active now</h2>
           {friends.length > 0 && (
             <button className="btn btn-small" onClick={inviteAll}>
-              Invite all friends
+              Invite everyone
             </button>
           )}
         </div>
 
-        <StatusPanel me={me} now={now} />
+        {activeFriends.length === 0 ? (
+          <p className="muted small">No friends are active right now. You can still invite everyone and see who's down.</p>
+        ) : (
+          <div className="active-strip" role="group" aria-label="Friends who are active now">
+            {activeFriends.map((f) => {
+              const isPicked = picked.includes(f.id);
+              const shared = sharedPrefs(me, f);
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`active-person ${isPicked ? "is-picked" : ""}`}
+                  aria-pressed={isPicked}
+                  title={shared.length ? `You both like ${joinNames(shared)}` : undefined}
+                  onClick={() => togglePick(f.id)}
+                >
+                  <Avatar user={f} size={64} />
+                  {isPicked && (
+                    <span className="active-check" aria-hidden="true">
+                      ✓
+                    </span>
+                  )}
+                  <span className="active-name">{f.name}</span>
+                  <span className="active-zone">{f.status.zone}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        <div className="card stack">
-          {activeFriends.length === 0 && (
-            <p className="muted small">
-              No friends are active right now. You can still invite everyone and see who's down.
-            </p>
-          )}
-          {activeFriends.map((f) => {
-            const shared = sharedPrefs(me, f);
-            return (
-              <label key={f.id} className="user-row check">
-                <input type="checkbox" checked={picked.includes(f.id)} onChange={() => togglePick(f.id)} />
-                <Avatar user={f} size={36} now={now} />
-                <span className="grow">
-                  <span className="block">{f.name}</span>
-                  <span className="block muted small">
-                    near {f.status.zone}
-                    {shared.length > 0 && ` · you both like ${joinNames(shared.slice(0, 2))}`}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-
-          {picked.length > 0 ? (
-            <div className="stack send-bar">
-              <span className="small">
-                Ask <strong>{joinNames(pickedNames)}</strong> if they want to eat. You'll pick a dish together once
-                someone says yes.
-              </span>
-              {picked.length > 1 && (
-                <div className="chips">
-                  <button className={`chip ${mode === "group" ? "chip-on" : ""}`} onClick={() => setMode("group")}>
-                    Group invite · eat together
-                  </button>
-                  <button
-                    className={`chip ${mode === "individual" ? "chip-on" : ""}`}
-                    onClick={() => setMode("individual")}
-                  >
-                    Individual invites
-                  </button>
-                </div>
-              )}
-              <div className="row wrap">
-                <button className="btn btn-small btn-primary" disabled={sending} onClick={() => send("now")}>
-                  Right now
+        {picked.length > 0 ? (
+          <div className="stack send-bar">
+            <span className="small">
+              Ask <strong>{joinNames(pickedNames)}</strong> if they want to eat. You'll pick a dish together once
+              someone says yes.
+            </span>
+            {picked.length > 1 && (
+              <div className="chips">
+                <button className={`chip ${mode === "group" ? "chip-on" : ""}`} onClick={() => setMode("group")}>
+                  Group invite
                 </button>
-                <button className="btn btn-small" disabled={sending} onClick={() => send("10")}>
-                  In 10 min
+                <button className={`chip ${mode === "individual" ? "chip-on" : ""}`} onClick={() => setMode("individual")}>
+                  Separate invites
                 </button>
-                <button className="btn btn-small" disabled={sending} onClick={() => send("20")}>
-                  In 20 min
-                </button>
-                <Link className="btn btn-small" to={`/invite/new?to=${picked.join(",")}`}>
-                  Later or with a dish…
-                </Link>
               </div>
-              <button className="btn-link" onClick={() => setPicked([])}>
-                Clear
+            )}
+            <div className="row wrap">
+              <button className="btn btn-small btn-primary" disabled={sending} onClick={() => send("now")}>
+                Right now
               </button>
+              <button className="btn btn-small" disabled={sending} onClick={() => send("10")}>
+                In 10 min
+              </button>
+              <button className="btn btn-small" disabled={sending} onClick={() => send("20")}>
+                In 20 min
+              </button>
+              <Link className="btn btn-small" to={`/invite/new?to=${picked.join(",")}&src=${pickSource}`}>
+                Later or with a dish
+              </Link>
             </div>
-          ) : (
-            activeFriends.length > 0 && <p className="muted small">Tap people to ask if they want to eat.</p>
-          )}
-          {sentMsg && <p className="success">{sentMsg}</p>}
-        </div>
+            <button className="btn-link" onClick={() => setPicked([])}>
+              Clear
+            </button>
+          </div>
+        ) : (
+          activeFriends.length > 0 && <p className="muted small">Tap people to ask if they want to eat.</p>
+        )}
+        {sentMsg && <p className="success">{sentMsg}</p>}
+
+        <StatusPanel me={me} now={now} />
       </section>
 
       {/* ---- Invites & plans (only when there's something) ---- */}
@@ -259,7 +268,7 @@ export default function Home() {
                   </Link>
                   <span className="block muted small">You both like {joinNames(shared.slice(0, 3))}</span>
                 </span>
-                <Link className="btn btn-small btn-primary" to={`/invite/new?to=${u.id}`}>
+                <Link className="btn btn-small btn-primary" to={`/invite/new?to=${u.id}&src=taste`}>
                   Ask to eat
                 </Link>
               </div>

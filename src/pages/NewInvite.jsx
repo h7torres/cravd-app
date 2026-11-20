@@ -65,7 +65,16 @@ export default function NewInvite() {
     }
     setSending(true);
     try {
-      await sendInvite({ fromId: me.id, toIds, itemId, urgency, plannedFor: plannedMs, note: note.trim(), visibility });
+      await sendInvite({
+        fromId: me.id,
+        toIds,
+        itemId,
+        urgency,
+        plannedFor: plannedMs,
+        note: note.trim(),
+        visibility,
+        source: params.get("src") || "invite_tab",
+      });
       navigate("/");
     } catch (err) {
       console.error(err);
@@ -109,7 +118,7 @@ export default function NewInvite() {
           ))}
         </div>
         {urgency === "planned" ? (
-          <input type="datetime-local" value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />
+          <input type="datetime-local" step={900} value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />
         ) : (
           <p className="muted small">If nobody answers, this disappears 15 min after the meet time.</p>
         )}

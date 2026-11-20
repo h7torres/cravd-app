@@ -109,7 +109,7 @@ export default function Friends() {
                 now={now}
                 sub={isFree(f, now) ? `Free near ${f.status.zone}` : sharedPrefs(me, f).length ? `You both like ${sharedPrefs(me, f).slice(0, 3).join(", ")}` : `@${handleOf(f)}`}
               >
-                <Link className="btn btn-small" to={`/invite/new?to=${f.id}`}>Invite</Link>
+                <Link className="btn btn-small" to={`/invite/new?to=${f.id}&src=friends`}>Invite</Link>
               </UserRow>
             ))}
           </div>

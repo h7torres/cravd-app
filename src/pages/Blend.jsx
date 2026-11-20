@@ -80,7 +80,7 @@ export default function Blend() {
             </div>
           </div>
           <p className="small">{top.reason}</p>
-          <Link className="btn btn-primary btn-block" to={`/invite/new?item=${top.item.id}&to=${friend.id}`}>
+          <Link className="btn btn-primary btn-block" to={`/invite/new?item=${top.item.id}&to=${friend.id}&src=blend`}>
             Invite {friend.name} to this
           </Link>
         </div>

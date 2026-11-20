@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useData } from "../context/DataContext";
 import { sendInvite } from "../lib/actions";
-import { arr, isFree, toLocalInput, useNow } from "../lib/helpers";
+import { arr, isFree, nextQuarterHour, toLocalInput, useNow } from "../lib/helpers";
 import { sendThreadMessage, threadIdFor } from "../lib/messages";
 import Avatar from "./Avatar";
 import DishPicker from "./DishPicker";
@@ -10,7 +10,7 @@ import DishThumb from "./DishThumb";
 const TIMES = [["now", "Right now"], ["10", "In 10 min"], ["20", "In 20 min"], ["planned", "Later"]];
 
 function defaultLater() {
-  return toLocalInput(Date.now() + 60 * 60 * 1000);
+  return toLocalInput(nextQuarterHour(Date.now() + 60 * 60 * 1000));
 }
 
 // From dish cards: select friends; from a chat: a single pre-selected friend.
@@ -48,6 +48,7 @@ export default function SendToFriendSheet({ item = null, lockedFriendId = null, 
         inviteRef = await sendInvite({
           fromId: me.id, toIds: recipientIds, itemId: itemId || null,
           urgency, plannedFor: plannedMs, note: note.trim(), visibility: "friends",
+          source: "share_sheet",
         });
       }
       // Use a separate 1:1 thread for each friend. Group threads can be added later.
@@ -86,7 +87,7 @@ export default function SendToFriendSheet({ item = null, lockedFriendId = null, 
         {!item && <DishPicker items={items} selectedId={itemId} onPick={(picked) => setItemId(picked.id)} label="Optional dish for the invite" />}
         <strong className="small">When?</strong>
         <div className="chips">{TIMES.map(([key, label]) => <button key={key} className={`chip ${urgency === key ? "chip-on" : ""}`} onClick={() => setUrgency(key)}>{label}</button>)}</div>
-        {urgency === "planned" && <input type="datetime-local" value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />}
+        {urgency === "planned" && <input type="datetime-local" step={900} value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)} />}
         <input placeholder="Optional note (e.g. pizza after class?)" maxLength={120} value={note} onChange={(e) => setNote(e.target.value)} />
         {error && <p className="error" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={busy || !chosen.length} onClick={() => submit("invite")}>{busy ? "Sending…" : "Send invite"}</button>
