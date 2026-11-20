@@ -187,3 +187,19 @@ export function compressImage(file, maxSize = 640, quality = 0.7) {
     img.src = url;
   });
 }
+
+// Most common dish tags across the dishes a user has reviewed ("keywords" for their profile)
+export function reviewKeywords(userId, reviews, itemsById, limit = 5) {
+  const counts = {};
+  reviews
+    .filter((r) => arr(r.authorIds).includes(userId))
+    .forEach((r) => {
+      arr(itemsById[r.itemId]?.tags).forEach((t) => {
+        counts[t] = (counts[t] || 0) + 1;
+      });
+    });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
