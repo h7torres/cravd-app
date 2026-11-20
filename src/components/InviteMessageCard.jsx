@@ -5,7 +5,7 @@ import { db } from "../firebase";
 import { useData } from "../context/DataContext";
 import { respondToInvite } from "../lib/actions";
 import { sendThreadMessage } from "../lib/messages";
-import { arr, isLive, toLocalInput, whenLabel } from "../lib/helpers";
+import { arr, downIds, isLive, participants, toLocalInput, whenLabel } from "../lib/helpers";
 import DishThumb from "./DishThumb";
 
 export default function InviteMessageCard({ inviteId, now, onCounter }) {
@@ -31,24 +31,32 @@ export default function InviteMessageCard({ inviteId, now, onCounter }) {
         <strong>{item.name}</strong>
         <span className="muted small">{item.diningHall}</span>
       </Link>}
-      {!item && <strong>Let's eat together!</strong>}
+      {!item && <strong>Want to eat?</strong>}
+      {!item && <span className="muted small">You'll pick a dish together once someone says yes.</span>}
       <span className="small"><strong>When:</strong> {whenLabel(invite, now)}</span>
       {invite.note && <p className="small">“{invite.note}”</p>}
       {responses.length > 0 && <p className="muted small">{responses.join(" · ")}</p>}
       {isRecipient && !isSender && (
         <InviteReplyControls invite={invite} now={now} onCounter={onCounter} />
       )}
-      {isSender && !live && <p className="muted small">Invite expired or closed</p>}
+      {invite.status === "open" && downIds(invite).length > 0 && participants(invite).includes(me.id) && (
+        <Link className="btn btn-small btn-primary" to={`/meal/${invite.id}`}>
+          {invite.itemId ? "Open plan" : "Pick a dish together"}
+        </Link>
+      )}
+      {isSender && !live && downIds(invite).length === 0 && <p className="muted small">Invite expired or closed</p>}
     </article>
   );
 }
 
 // Shared by incoming Home invites and invite cards in chat.
-// eslint-disable-next-line react-refresh/only-export-components
 export function InviteReplyControls({ invite, now, onCounter }) {
   const { me, usersById } = useData();
   const response = invite.responses?.[me.id];
   const live = isLive(invite, now);
+  // Suggesting a new time only works for 1:1 invites. On a group invite it would
+  // silently move the plan for everyone else who already said yes.
+  const oneToOne = arr(invite.toIds).length === 1;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -113,7 +121,7 @@ export function InviteReplyControls({ invite, now, onCounter }) {
   }
 
   async function sendSuggestion() {
-    if (busy || !live) return;
+    if (busy || !live || !oneToOne) return;
     const time = new Date(proposedFor).getTime();
     if (!Number.isFinite(time) || time <= Date.now()) {
       setError("Choose a future date and time.");
@@ -151,21 +159,21 @@ export function InviteReplyControls({ invite, now, onCounter }) {
 
   return (
     <div className="invite-reply stack">
-      {!live ? (
+      {pendingCounter && response !== "down" ? (
+        <p className="muted small">
+          You suggested {new Date(pendingCounter.proposedFor).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}, waiting on {usersById[invite.fromId]?.name || "your friend"}
+        </p>
+      ) : !live ? (
         <p className="muted small">Expired</p>
       ) : response === "down" ? (
         <p className="success">You're in ✓ · {whenLabel(invite, now)}</p>
       ) : response === "cant" ? (
         <div className="row wrap">
           <span className="muted">You declined</span>
-          {undoUntil > Date.now() && (
+          {undoUntil > 0 && (
             <button type="button" className="btn-link invite-reply-link" disabled={busy} onClick={undo}>Undo</button>
           )}
         </div>
-      ) : pendingCounter ? (
-        <p className="muted small">
-          You suggested {new Date(pendingCounter.proposedFor).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}, waiting on {usersById[invite.fromId]?.name || "your friend"}
-        </p>
       ) : response ? (
         <p className="muted small">You responded: {response}</p>
       ) : (
@@ -174,17 +182,19 @@ export function InviteReplyControls({ invite, now, onCounter }) {
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => answer("down")}>Yes, I'm down</button>
             <button type="button" className="btn" disabled={busy} onClick={() => answer("cant")}>Can't make it</button>
           </div>
-          <button type="button" className="btn-link invite-reply-link" disabled={busy} aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)}>
-            Suggest a different time
-          </button>
-          {pickerOpen && (
+          {oneToOne && (
+            <button type="button" className="btn-link invite-reply-link" disabled={busy} aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)}>
+              Suggest a different time
+            </button>
+          )}
+          {oneToOne && pickerOpen && (
             <div className="stack invite-reply-picker">
               <div className="row wrap">
                 <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor(toLocalInput(Date.now() + 30 * 60000))}>In 30 min</button>
-                <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor("")}>After class</button>
+                <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor(toLocalInput(Date.now() + 60 * 60000))}>In 1 hr</button>
                 <button type="button" className="chip" disabled={busy} onClick={chooseTomorrow}>Tomorrow</button>
               </div>
-              <label className="small" htmlFor={`proposed-${invite.id}`}>Proposed time (choose when class ends if needed)</label>
+              <label className="small" htmlFor={`proposed-${invite.id}`}>Proposed time</label>
               <input id={`proposed-${invite.id}`} type="datetime-local" value={proposedFor} min={toLocalInput(now)} onChange={(e) => setProposedFor(e.target.value)} />
               <button type="button" className="btn btn-primary" disabled={busy} onClick={sendSuggestion}>Send suggestion</button>
             </div>

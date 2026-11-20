@@ -2,7 +2,7 @@ import "../styles/friendsExplore.css";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useData } from "../context/DataContext";
-import { arr, canSeeInvite, isLive, joinNames, sharedTags, useNow } from "../lib/helpers";
+import { allergyConflicts, arr, canSeeInvite, isLive, joinNames, sharedTags, useNow } from "../lib/helpers";
 import DishThumb from "../components/DishThumb";
 import InviteCard from "../components/InviteCard";
 import ReviewCard from "../components/ReviewCard";
@@ -97,7 +97,7 @@ export default function Explore() {
       canSeeInvite(inv, me)
   );
   const suggestions = items
-    .filter((item) => !arr(me.favorites).includes(item.id))
+    .filter((item) => !arr(me.favorites).includes(item.id) && allergyConflicts(item, me).length === 0)
     .map((item) => ({ item, fans: friendFans(item), matches: sharedTags(item, me) }))
     .sort((a, b) =>
       (b.fans.length * 3 + b.matches.length * 2) - (a.fans.length * 3 + a.matches.length * 2) ||
@@ -228,6 +228,8 @@ export default function Explore() {
 }
 
 function DishCard({ item, fans, matches, reviewCount, compact = false }) {
+  const { me } = useData();
+  const conflicts = allergyConflicts(item, me);
   const navigate = useNavigate();
   const [shareOpen, setShareOpen] = useState(false);
   return (
@@ -239,6 +241,7 @@ function DishCard({ item, fans, matches, reviewCount, compact = false }) {
         <span className="muted small">{reviewCount} {reviewCount === 1 ? "review" : "reviews"}</span>
         {fans.length > 0 && <span className="signal">♥ {joinNames(fans.map((f) => f.name))} saved this</span>}
         {matches.length > 0 && <span className="muted small">Your taste: {matches.join(", ")}</span>}
+        {conflicts.length > 0 && <span className="allergy-warn">⚠ Contains {conflicts.join(", ")}</span>}
       </Link>
       <button className="btn btn-small" onClick={() => setShareOpen(true)}>Send to a friend</button>
       {shareOpen && <SendToFriendSheet item={item} onClose={() => setShareOpen(false)} onSent={(threadId) => { navigate(`/messages/${threadId}`); }} />}

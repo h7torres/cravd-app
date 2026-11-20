@@ -4,38 +4,43 @@ import { useData } from "../context/DataContext";
 import { sendInvite } from "../lib/actions";
 import {
   arr,
-  DAY,
   downIds,
   isFree,
   isLive,
   isPlan,
   joinNames,
   participants,
-  timeAgo,
+  sharedPrefs,
+  tasteMatches,
   useNow,
   whenLabel,
 } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 import DishThumb from "../components/DishThumb";
 import InviteCard from "../components/InviteCard";
+import ReviewCard from "../components/ReviewCard";
 import StatusPanel from "../components/StatusPanel";
 
-// The fast lane: people first. Falls back to recent friend activity, then to a prompt.
+const FEED_SIZE = 6;
+
+// Home: who's active (and inviting them), your invites and plans, then what your
+// friends have been liking and posting.
 export default function Home() {
-  const { me, usersById, itemsById, items, invites, reviews } = useData();
+  const { me, usersById, itemsById, invites, reviews } = useData();
   const now = useNow();
   const [picked, setPicked] = useState([]);
+  const [mode, setMode] = useState("group");
+  const [sending, setSending] = useState(false);
   const [sentMsg, setSentMsg] = useState("");
 
   const friendIds = arr(me.friends);
   const friends = friendIds.map((id) => usersById[id]).filter(Boolean);
-  const freeFriends = friends.filter((f) => isFree(f, now));
+  const activeFriends = friends.filter((f) => isFree(f, now));
   const byMeet = (a, b) => a.meetAt - b.meetAt;
 
+  // ---- Invites & plans ----
   const eating = invites.filter((inv) => inv.status === "eating" && participants(inv).includes(me.id));
-  const plans = invites
-    .filter((inv) => isPlan(inv, now) && participants(inv).includes(me.id))
-    .sort(byMeet);
+  const plans = invites.filter((inv) => isPlan(inv, now) && participants(inv).includes(me.id)).sort(byMeet);
   const incoming = invites
     .filter(
       (inv) =>
@@ -49,77 +54,150 @@ export default function Home() {
     .filter((inv) => inv.fromId === me.id && isLive(inv, now) && downIds(inv).length === 0)
     .sort(byMeet);
 
-  const hasLive =
-    eating.length + plans.length + incoming.length + waiting.length + freeFriends.length > 0;
+  // ---- Feed: reviews my friends posted or liked, topped up with popular campus posts ----
+  const friendTouched = (r) =>
+    arr(r.authorIds).some((id) => friendIds.includes(id)) || arr(r.upvotes).some((id) => friendIds.includes(id));
+  const friendFeed = reviews
+    .filter((r) => itemsById[r.itemId] && friendTouched(r))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 12);
+  const campusFeed =
+    friendFeed.length >= FEED_SIZE
+      ? []
+      : reviews
+          .filter((r) => itemsById[r.itemId] && !friendTouched(r))
+          .sort((a, b) => arr(b.upvotes).length - arr(a.upvotes).length || b.createdAt - a.createdAt)
+          .slice(0, FEED_SIZE - friendFeed.length);
 
-  // Rung 2: recent friend activity
-  const weekAgo = now - 7 * DAY;
-  const activity = [
-    ...reviews
-      .filter((r) => r.createdAt > weekAgo && arr(r.authorIds).some((id) => friendIds.includes(id)))
-      .map((r) => ({
-        key: r.id,
-        at: r.createdAt,
-        who: arr(r.authorIds).map((id) => usersById[id]?.name).filter(Boolean),
-        verb: "reviewed",
-        item: itemsById[r.itemId],
-      })),
-    ...invites
-      .filter(
-        (inv) =>
-          inv.status === "done" &&
-          !inv.reviewId &&
-          (inv.doneAt || 0) > weekAgo &&
-          !participants(inv).includes(me.id) &&
-          participants(inv).some((id) => friendIds.includes(id))
-      )
-      .map((inv) => ({
-        key: inv.id,
-        at: inv.doneAt,
-        who: participants(inv).map((id) => usersById[id]?.name).filter(Boolean),
-        verb: "ate",
-        item: itemsById[inv.itemId],
-      })),
-  ]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 6);
+  const tasteTwins = tasteMatches(me, friends).slice(0, 3);
 
-  // Rung 3: the dish most of your friends love
-  const crowdPick = items
-    .map((item) => ({ item, fans: friends.filter((f) => arr(f.favorites).includes(item.id)) }))
-    .filter((x) => x.fans.length > 0)
-    .sort((a, b) => b.fans.length - a.fans.length)[0];
-
+  // ---- Inviting ----
   function togglePick(id) {
+    setSentMsg("");
     setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  async function quickInvite(urgency) {
-    if (picked.length === 0) return;
-    await sendInvite({ fromId: me.id, toIds: picked, urgency, visibility: "friends" });
-    setSentMsg(`Invite sent to ${joinNames(picked.map((id) => usersById[id]?.name).filter(Boolean))}.`);
-    setPicked([]);
+  function inviteAll() {
+    setSentMsg("");
+    setPicked(friendIds.filter((id) => usersById[id]));
   }
 
+  async function send(urgency) {
+    if (picked.length === 0 || sending) return;
+    setSending(true);
+    const names = joinNames(picked.map((id) => usersById[id]?.name).filter(Boolean));
+    try {
+      if (mode === "group" || picked.length === 1) {
+        await sendInvite({ fromId: me.id, toIds: picked, urgency, visibility: "friends" });
+        setSentMsg(picked.length === 1 ? `Invite sent to ${names}.` : `Group invite sent to ${names}.`);
+      } else {
+        await Promise.all(
+          picked.map((id) => sendInvite({ fromId: me.id, toIds: [id], urgency, visibility: "friends" }))
+        );
+        setSentMsg(`${picked.length} separate invites sent to ${names}.`);
+      }
+      setPicked([]);
+    } catch (err) {
+      console.error(err);
+      setSentMsg("Couldn't send. Try again.");
+    }
+    setSending(false);
+  }
+
+  const pickedNames = picked.map((id) => usersById[id]?.name).filter(Boolean);
   const planProps = { me, usersById, itemsById, now };
 
   return (
     <div className="stack">
       <h1>Hey {me.name}</h1>
-      <StatusPanel me={me} now={now} />
 
-      {eating.length > 0 && (
+      {/* ---- Active now ---- */}
+      <section className="stack">
+        <div className="row between">
+          <h2 style={{ margin: 0 }}>Active now</h2>
+          {friends.length > 0 && (
+            <button className="btn btn-small" onClick={inviteAll}>
+              Invite all friends
+            </button>
+          )}
+        </div>
+
+        <StatusPanel me={me} now={now} />
+
+        <div className="card stack">
+          {activeFriends.length === 0 && (
+            <p className="muted small">
+              No friends are active right now. You can still invite everyone and see who's down.
+            </p>
+          )}
+          {activeFriends.map((f) => {
+            const shared = sharedPrefs(me, f);
+            return (
+              <label key={f.id} className="user-row check">
+                <input type="checkbox" checked={picked.includes(f.id)} onChange={() => togglePick(f.id)} />
+                <Avatar user={f} size={36} now={now} />
+                <span className="grow">
+                  <span className="block">{f.name}</span>
+                  <span className="block muted small">
+                    near {f.status.zone}
+                    {shared.length > 0 && ` · you both like ${joinNames(shared.slice(0, 2))}`}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+
+          {picked.length > 0 ? (
+            <div className="stack send-bar">
+              <span className="small">
+                Ask <strong>{joinNames(pickedNames)}</strong> if they want to eat. You'll pick a dish together once
+                someone says yes.
+              </span>
+              {picked.length > 1 && (
+                <div className="chips">
+                  <button className={`chip ${mode === "group" ? "chip-on" : ""}`} onClick={() => setMode("group")}>
+                    Group invite · eat together
+                  </button>
+                  <button
+                    className={`chip ${mode === "individual" ? "chip-on" : ""}`}
+                    onClick={() => setMode("individual")}
+                  >
+                    Individual invites
+                  </button>
+                </div>
+              )}
+              <div className="row wrap">
+                <button className="btn btn-small btn-primary" disabled={sending} onClick={() => send("now")}>
+                  Right now
+                </button>
+                <button className="btn btn-small" disabled={sending} onClick={() => send("10")}>
+                  In 10 min
+                </button>
+                <button className="btn btn-small" disabled={sending} onClick={() => send("20")}>
+                  In 20 min
+                </button>
+                <Link className="btn btn-small" to={`/invite/new?to=${picked.join(",")}`}>
+                  Later or with a dish…
+                </Link>
+              </div>
+              <button className="btn-link" onClick={() => setPicked([])}>
+                Clear
+              </button>
+            </div>
+          ) : (
+            activeFriends.length > 0 && <p className="muted small">Tap people to ask if they want to eat.</p>
+          )}
+          {sentMsg && <p className="success">{sentMsg}</p>}
+        </div>
+      </section>
+
+      {/* ---- Invites & plans (only when there's something) ---- */}
+      {eating.length + plans.length > 0 && (
         <section className="stack">
-          <h2>Finish your review</h2>
+          <h2>Your plans</h2>
           {eating.map((inv) => (
             <PlanCard key={inv.id} invite={inv} eating {...planProps} />
           ))}
-        </section>
-      )}
-
-      {plans.length > 0 && (
-        <section className="stack">
-          <h2>Your plans</h2>
           {plans.map((inv) => (
             <PlanCard key={inv.id} invite={inv} {...planProps} />
           ))}
@@ -135,48 +213,6 @@ export default function Home() {
         </section>
       )}
 
-      {freeFriends.length > 0 && (
-        <section className="stack">
-          <h2>Free right now</h2>
-          <div className="card stack">
-            {freeFriends.map((f) => (
-              <label key={f.id} className="user-row check">
-                <input type="checkbox" checked={picked.includes(f.id)} onChange={() => togglePick(f.id)} />
-                <Avatar user={f} size={36} now={now} />
-                <span className="grow">
-                  <span className="block">{f.name}</span>
-                  <span className="block muted small">near {f.status.zone}</span>
-                </span>
-              </label>
-            ))}
-            {picked.length > 0 ? (
-              <div className="stack">
-                <span className="small">
-                  Quick invite {joinNames(picked.map((id) => usersById[id]?.name).filter(Boolean))}:
-                </span>
-                <div className="row wrap">
-                  <button className="btn btn-small btn-primary" onClick={() => quickInvite("now")}>
-                    Right now
-                  </button>
-                  <button className="btn btn-small" onClick={() => quickInvite("10")}>
-                    In 10 min
-                  </button>
-                  <button className="btn btn-small" onClick={() => quickInvite("20")}>
-                    In 20 min
-                  </button>
-                  <Link className="btn btn-small" to={`/invite/new?to=${picked.join(",")}`}>
-                    Pick a dish…
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <p className="muted small">Tap people to invite them in one go.</p>
-            )}
-          </div>
-        </section>
-      )}
-      {sentMsg && <p className="success">{sentMsg}</p>}
-
       {waiting.length > 0 && (
         <section className="stack">
           <h2>Waiting on replies</h2>
@@ -186,72 +222,49 @@ export default function Home() {
         </section>
       )}
 
-      {!hasLive && (
-        <section className="stack">
-          <h2>Nobody's around right now</h2>
+      {/* ---- What friends are liking and posting ---- */}
+      <section className="stack">
+        <h2>From your friends</h2>
+        {friendFeed.length === 0 && (
+          <p className="muted small">
+            When your friends like or post a meal, it shows up here so you can invite them to try it with you.
+          </p>
+        )}
+        {friendFeed.map((r) => (
+          <ReviewCard key={r.id} review={r} now={now} />
+        ))}
+      </section>
 
-          {friends.length === 0 ? (
-            <div className="card empty stack">
-              <p>You don't have friends on Cravd yet.</p>
-              <p className="muted small">Browse reviews to find people whose taste matches yours.</p>
-              <div className="row wrap" style={{ justifyContent: "center" }}>
-                <Link className="btn btn-primary" to="/explore">
-                  Explore
+      {campusFeed.length > 0 && (
+        <section className="stack">
+          <h2>Popular on campus</h2>
+          {campusFeed.map((r) => (
+            <ReviewCard key={r.id} review={r} now={now} />
+          ))}
+        </section>
+      )}
+
+      {tasteTwins.length > 0 && (
+        <section className="stack">
+          <h2>Similar taste</h2>
+          <div className="card">
+            {tasteTwins.map(({ u, shared }) => (
+              <div key={u.id} className="user-row">
+                <Link to={`/profile/${u.id}`}>
+                  <Avatar user={u} size={36} now={now} />
                 </Link>
-                <Link className="btn" to="/friends">
-                  Find people
+                <span className="grow">
+                  <Link to={`/profile/${u.id}`} className="name">
+                    {u.name}
+                  </Link>
+                  <span className="block muted small">You both like {joinNames(shared.slice(0, 3))}</span>
+                </span>
+                <Link className="btn btn-small btn-primary" to={`/invite/new?to=${u.id}`}>
+                  Ask to eat
                 </Link>
               </div>
-            </div>
-          ) : (
-            <>
-              {activity.length > 0 && (
-                <div className="card stack">
-                  <span className="muted small">Recently from your friends</span>
-                  {activity.map((a) => (
-                    <div key={a.key} className="row">
-                      <DishThumb item={a.item} size={36} />
-                      <span className="grow small">
-                        <strong>{joinNames(a.who)}</strong>{" "}
-                        {a.verb === "ate"
-                          ? `got ${a.item ? a.item.name : "lunch"} together`
-                          : `reviewed ${a.item?.name || "a dish"}`}
-                      </span>
-                      <span className="muted small">{timeAgo(a.at, now)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {crowdPick && (
-                <Link
-                  className="card row plan-card"
-                  to={`/invite/new?item=${crowdPick.item.id}&to=${crowdPick.fans
-                    .map((f) => f.id)
-                    .join(",")}&when=planned`}
-                >
-                  <DishThumb item={crowdPick.item} size={44} />
-                  <span className="grow">
-                    <strong>
-                      {joinNames(crowdPick.fans.map((f) => f.name))}{" "}
-                      {crowdPick.fans.length === 1 ? "loves" : "love"} {crowdPick.item.name}
-                    </strong>
-                    <span className="block muted small">Invite them for another day?</span>
-                  </span>
-                </Link>
-              )}
-
-              <Link className="card row plan-card" to="/blend">
-                <span className="dish-thumb" style={{ width: 44, height: 44, fontSize: 24 }}>
-                  🤝
-                </span>
-                <span className="grow">
-                  <strong>Blend with a friend</strong>
-                  <span className="block muted small">Find the dish you'd both be happy with.</span>
-                </span>
-              </Link>
-            </>
-          )}
+            ))}
+          </div>
         </section>
       )}
     </div>
@@ -264,16 +277,18 @@ function PlanCard({ invite, eating, me, usersById, itemsById, now }) {
     .map((id) => usersById[id]?.name)
     .filter(Boolean);
   const item = itemsById[invite.itemId];
+  const hasDown = downIds(invite).length > 0;
+  const action = eating || (item && hasDown) ? "Post together" : !item ? "Pick dish" : "Open";
   return (
     <Link to={`/meal/${invite.id}`} className="card row plan-card">
       <DishThumb item={item} size={44} />
       <span className="grow">
-        <strong>{eating ? `Review with ${joinNames(others)}` : `Eating with ${joinNames(others)}`}</strong>
+        <strong>Eating with {joinNames(others)}</strong>
         <span className="block muted small">
-          {item ? item.name : "Dish TBD"} · {eating ? "happening now" : whenLabel(invite, now)}
+          {item ? item.name : "Pick a dish together"} · {eating ? "happening now" : whenLabel(invite, now)}
         </span>
       </span>
-      <span className="btn btn-small btn-primary">{eating ? "Review" : "Open"}</span>
+      <span className="btn btn-small btn-primary">{action}</span>
     </Link>
   );
 }

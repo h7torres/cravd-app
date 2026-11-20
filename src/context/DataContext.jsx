@@ -4,7 +4,7 @@ import { db } from "../firebase";
 import { useUser } from "./UserContext";
 
 const DataContext = createContext(null);
-const COLLECTIONS = ["users", "items", "invites", "reviews", "friendRequests"];
+const COLLECTIONS = ["users", "items", "invites", "reviews", "friendRequests", "comments"];
 
 // Subscribes to every collection in real time, so changes show up instantly on every screen.
 export function DataProvider({ children }) {
@@ -15,6 +15,7 @@ export function DataProvider({ children }) {
     invites: [],
     reviews: [],
     friendRequests: [],
+    comments: [],
   });
   const [loaded, setLoaded] = useState({});
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { sendInvite } from "../lib/actions";
-import { arr, isFree, toLocalInput, useNow } from "../lib/helpers";
+import { allergyConflicts, arr, isFree, toLocalInput, useNow } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 
 const WHEN = [
@@ -118,10 +118,11 @@ export default function NewInvite() {
       <section className="stack">
         <h2>Dish</h2>
         <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
-          <option value="">No dish yet, decide together</option>
+          <option value="">No dish yet: pick one together after they say yes</option>
           {sortedItems.map((i) => (
             <option key={i.id} value={i.id}>
               {i.emoji} {i.name} · {i.diningHall}
+              {allergyConflicts(i, me).length ? ` · ⚠ ${allergyConflicts(i, me).join(", ")}` : ""}
             </option>
           ))}
         </select>

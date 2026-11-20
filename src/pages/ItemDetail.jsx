@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
-import { postSoloReview, toggleFavorite } from "../lib/actions";
-import { arr, compressImage, joinNames, sharedTags, useNow } from "../lib/helpers";
+import { toggleFavorite } from "../lib/actions";
+import { allergyConflicts, arr, joinNames, sharedTags, useNow } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 import DishThumb from "../components/DishThumb";
 import ReviewCard from "../components/ReviewCard";
@@ -14,9 +14,6 @@ export default function ItemDetail() {
   const [shareOpen, setShareOpen] = useState(false);
   const { me, users, usersById, itemsById, reviews } = useData();
   const now = useNow();
-  const [text, setText] = useState("");
-  const [photo, setPhoto] = useState("");
-  const [posting, setPosting] = useState(false);
 
   const item = itemsById[itemId];
   if (!item) {
@@ -31,6 +28,7 @@ export default function ItemDetail() {
   const isFav = arr(me.favorites).includes(item.id);
   // The count is public, but names are only shown for friends
   const fanCount = users.filter((u) => arr(u.favorites).includes(item.id)).length;
+  const conflicts = allergyConflicts(item, me);
   const friends = arr(me.friends).map((id) => usersById[id]).filter(Boolean);
   const friendFans = friends.filter((f) => arr(f.favorites).includes(item.id));
   const tasteFriends = friends
@@ -44,28 +42,15 @@ export default function ItemDetail() {
     friendFans.length ? `&to=${friendFans.map((f) => f.id).join(",")}` : ""
   }`;
 
-  async function handlePhoto(e) {
-    const file = e.target.files?.[0];
-    if (file) setPhoto(await compressImage(file));
-  }
-
-  async function post() {
-    if (!text.trim()) return;
-    setPosting(true);
-    try {
-      await postSoloReview({ uid: me.id, itemId: item.id, text: text.trim(), photo });
-      setText("");
-      setPhoto("");
-    } catch (err) {
-      console.error(err);
-    }
-    setPosting(false);
-  }
-
   return (
     <div className="stack">
       {shareOpen && <SendToFriendSheet item={item} onClose={() => setShareOpen(false)} onSent={(threadId) => navigate(`/messages/${threadId}`)} />}
       <DishThumb item={item} wide />
+      {item.photoURL && item.photoCredit && (
+        <a className="photo-credit" href={item.sourceUrl || "https://tritontaste.com"} target="_blank" rel="noreferrer">
+          Photo: {item.photoCredit}
+        </a>
+      )}
       <div>
         <h1 style={{ marginBottom: 2 }}>{item.name}</h1>
         <p className="muted">
@@ -73,6 +58,13 @@ export default function ItemDetail() {
         </p>
       </div>
       {item.description && <p>{item.description}</p>}
+
+      {conflicts.length > 0 && (
+        <p className="card allergy-warn">⚠ Contains {conflicts.join(", ")}, which is on your allergy list.</p>
+      )}
+      {arr(item.allergens).length > 0 && (
+        <p className="muted small">Contains: {arr(item.allergens).join(", ")}</p>
+      )}
 
       {arr(item.tags).length > 0 && (
         <div className="chips">
@@ -129,29 +121,14 @@ export default function ItemDetail() {
         {itemReviews.length > 0 ? (
           itemReviews.map((r) => <ReviewCard key={r.id} review={r} now={now} showDish={false} />)
         ) : (
-          <p className="muted">No reviews yet. Be the first.</p>
+          <p className="muted">No reviews yet.</p>
         )}
       </section>
 
-      <section className="card stack">
-        <strong>Write your own</strong>
-        <textarea
-          placeholder="What did you think? No stars, just your take."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        {photo && <img className="review-photo" src={photo} alt="" />}
-        <div className="row wrap">
-          <label className="btn btn-small">
-            {photo ? "Change photo" : "Add photo"}
-            <input type="file" accept="image/*" hidden onChange={handlePhoto} />
-          </label>
-          <button className="btn btn-small btn-primary" disabled={posting || !text.trim()} onClick={post}>
-            {posting ? "Posting…" : "Post review"}
-          </button>
-        </div>
-        <p className="muted small">Next time, send an invite first so you can review it together.</p>
-      </section>
+      <p className="card muted small">
+        Reviews on Cravd are posted by the people who ate together.{" "}
+        <Link to={inviteHref}>Invite someone to try this</Link> and post it together afterwards.
+      </p>
     </div>
   );
 }

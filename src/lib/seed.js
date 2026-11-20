@@ -1,140 +1,257 @@
-import { arrayUnion, collection, doc, getDocs, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { DAY, HOUR, MIN } from "./helpers";
 
-// Placeholder dishes: swap in the real menu and real photos (photoURL) before the demo.
+// Real UCSD dining hall dishes. Names and halls come from Triton Taste
+// (tritontaste.com, an unofficial student site), used with their permission.
+// sourceUrl points at each dish's Triton Taste page. Their photos can't be linked
+// directly (their server only serves images to their own site), so photos still
+// need to be copied into public/dishes/ and set as photoURL, credited to Triton Taste. Descriptions, flavor tags and allergens are our own
+// rough estimates for the demo: check the official HDH labels before relying on them.
 const ITEMS = [
-  { id: "i_katsu", name: "Chicken Katsu Bowl", category: "Bowls", diningHall: "64 Degrees", emoji: "🍛", tags: ["savory", "crunchy", "comfort"], description: "Crispy chicken over rice with katsu sauce." },
-  { id: "i_poke", name: "Salmon Poke Bowl", category: "Bowls", diningHall: "Foodworx", emoji: "🥗", tags: ["healthy", "light"], description: "Salmon, rice, edamame and cucumber with ponzu." },
-  { id: "i_pepperoni", name: "Pepperoni Pizza", category: "Pizza", diningHall: "Pines", emoji: "🍕", tags: ["cheesy", "savory", "comfort"], description: "Classic slice, best fresh out of the oven." },
-  { id: "i_margherita", name: "Margherita Flatbread", category: "Pizza", diningHall: "Canyon Vista", emoji: "🫓", tags: ["cheesy", "vegetarian", "light"], description: "Tomato, mozzarella and basil on a thin crust." },
-  { id: "i_carnitas", name: "Carnitas Tacos", category: "Tacos", diningHall: "OceanView Terrace", emoji: "🌮", tags: ["savory", "spicy"], description: "Three tacos with salsa verde and onions." },
-  { id: "i_veggie_tacos", name: "Roasted Veggie Tacos", category: "Tacos", diningHall: "Café Ventanas", emoji: "🌯", tags: ["vegan", "vegetarian", "healthy", "spicy"], description: "Roasted vegetables with chipotle crema." },
-  { id: "i_burger", name: "Classic Cheeseburger", category: "Burgers", diningHall: "Pines", emoji: "🍔", tags: ["savory", "cheesy", "comfort"], description: "Beef patty, cheddar, pickles and house sauce." },
-  { id: "i_plant_burger", name: "Plant-Based Burger", category: "Burgers", diningHall: "Roots", emoji: "🥬", tags: ["vegan", "savory"], description: "Plant-based patty with vegan aioli." },
-  { id: "i_ramen", name: "Spicy Miso Ramen", category: "Noodles", diningHall: "64 Degrees", emoji: "🍜", tags: ["spicy", "savory", "comfort"], description: "Miso broth with chili oil, egg and scallions." },
-  { id: "i_pad_thai", name: "Pad Thai", category: "Noodles", diningHall: "Canyon Vista", emoji: "🍝", tags: ["sweet", "savory"], description: "Rice noodles with tamarind sauce and peanuts." },
-  { id: "i_cookie", name: "Chocolate Chip Cookie", category: "Desserts", diningHall: "OceanView Terrace", emoji: "🍪", tags: ["sweet", "comfort"], description: "Big, soft, and usually warm." },
-  { id: "i_cheesecake", name: "Strawberry Cheesecake", category: "Desserts", diningHall: "Café Ventanas", emoji: "🍰", tags: ["sweet"], description: "Creamy cheesecake with strawberry topping." },
-  { id: "i_wings", name: "Buffalo Wings", category: "Comfort", diningHall: "Foodworx", emoji: "🍗", tags: ["spicy", "savory", "crunchy"], description: "Six wings with ranch and celery." },
-  { id: "i_mac", name: "Mac and Cheese", category: "Comfort", diningHall: "Pines", emoji: "🧀", tags: ["cheesy", "comfort", "vegetarian"], description: "Baked mac with a crunchy top." },
+  { id: "d_korean_chicken_bowl", name: "Korean Chicken Bowl with Rice", category: "Bowls", diningHall: "64 Degrees", emoji: "🍚", tags: ["savory", "spicy", "filling"], description: "Sweet-spicy Korean chicken over rice.", allergens: ["soy", "sesame", "gluten"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-korean-chicken-bowl-with-rice-bba5cafa" },
+  { id: "d_orange_chicken_bowl", name: "Orange Chicken Bowl with Rice", category: "Bowls", diningHall: "64 Degrees", emoji: "🍊", tags: ["sweet", "crunchy", "filling"], description: "Crispy orange chicken over rice.", allergens: ["gluten", "soy", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-orange-chicken-bowl-with-rice-a9908e85" },
+  { id: "d_dobu_jorim_tofu", name: "Dobu Jorim Tofu Bowl with Rice", category: "Bowls", diningHall: "64 Degrees", emoji: "🥢", tags: ["savory", "spicy", "healthy"], description: "Braised Korean-style tofu over rice.", allergens: ["soy", "sesame"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-dobu-jorim-tofu-bowl-with-rice-58c98491" },
+  { id: "d_thai_coconut_chicken", name: "Thai Coconut Chicken Bowl with Rice", category: "Bowls", diningHall: "64 Degrees", emoji: "🥥", tags: ["flavorful", "spicy", "savory"], description: "Coconut curry chicken over rice.", allergens: ["soy", "fish"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-thai-coconut-chicken-bowl-with-rice-192dc96d" },
+  { id: "d_spicy_tuna_tempura_roll", name: "Spicy Tuna and Tempura Shrimp Roll", category: "Sushi & Poke", diningHall: "64 Degrees", emoji: "🍣", tags: ["spicy", "crunchy", "fresh"], description: "Spicy tuna with crunchy tempura shrimp.", allergens: ["fish", "shellfish", "gluten", "eggs", "soy", "sesame"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-spicy-tuna-and-tempura-shrimp-roll-21fe7b1c" },
+  { id: "d_carne_asada_fries", name: "Carne Asada Fries", category: "Fries & Sides", diningHall: "64 Degrees", emoji: "🍟", tags: ["savory", "cheesy", "filling"], description: "Fries loaded with carne asada and cheese.", allergens: ["dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-carne-asada-fries-5b3cf243" },
+  { id: "d_churro_french_toast", name: "Churro French Toast", category: "Breakfast", diningHall: "64 Degrees", emoji: "🍞", tags: ["sweet", "comfort"], description: "Cinnamon-sugar French toast.", allergens: ["gluten", "dairy", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-churro-french-toast-8c097133" },
+  { id: "d_tres_leches", name: "Tres Leches Cake", category: "Desserts", diningHall: "64 Degrees", emoji: "🍰", tags: ["sweet", "comfort"], description: "Milk-soaked sponge cake.", allergens: ["gluten", "dairy", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-64-degrees-tres-leches-cake-28af8396" },
+  { id: "d_korean_bbq_smash", name: "Korean BBQ Smash Burger", category: "Burgers & Sandwiches", diningHall: "Canyon Vista", emoji: "🍔", tags: ["savory", "flavorful", "filling"], description: "Smash burger with Korean BBQ sauce.", allergens: ["gluten", "dairy", "eggs", "soy", "sesame"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-korean-bbq-smash-burger-2c8a636c" },
+  { id: "d_mongolian_bbq_bowl", name: "Mongolian BBQ Chicken Bowl", category: "Bowls", diningHall: "Canyon Vista", emoji: "🍗", tags: ["savory", "sweet", "filling"], description: "Stir-fried chicken in Mongolian BBQ sauce.", allergens: ["soy", "gluten"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-mongolian-bbq-chicken-bowl-10d1c224" },
+  { id: "d_acai_bowl", name: "Acai Bowl", category: "Breakfast", diningHall: "Canyon Vista", emoji: "🫐", tags: ["sweet", "fresh", "light", "healthy"], description: "Acai blend topped with fruit and granola.", allergens: ["tree nuts"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-acai-bowl-58d60e80" },
+  { id: "d_cv_poke", name: "BYO Poke Bowl", category: "Sushi & Poke", diningHall: "Canyon Vista", emoji: "🥗", tags: ["fresh", "light", "healthy"], description: "Build your own poke bowl.", allergens: ["fish", "soy", "sesame"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-byo-poke-bowl-44e367b1" },
+  { id: "d_huli_huli", name: "Huli Huli Chicken Plate", category: "Plates", diningHall: "Canyon Vista", emoji: "🍍", tags: ["sweet", "savory", "flavorful"], description: "Hawaiian-style grilled chicken plate.", allergens: ["soy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-huli-huli-chicken-plate-a898a663" },
+  { id: "d_buffalo_chicken_sandwich", name: "Buffalo Chicken Sandwich", category: "Burgers & Sandwiches", diningHall: "Canyon Vista", emoji: "🥪", tags: ["spicy", "tangy", "crunchy"], description: "Crispy chicken tossed in buffalo sauce.", allergens: ["gluten", "dairy", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-buffalo-chicken-sandwich-76b15c54" },
+  { id: "d_oreo_cheesecake", name: "Oreo Cheesecake", category: "Desserts", diningHall: "Canyon Vista", emoji: "🍰", tags: ["sweet"], description: "Cheesecake with cookie crust.", allergens: ["gluten", "dairy", "eggs", "soy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-oreo-cheesecake-f4696915" },
+  { id: "d_loaded_chicken_fries", name: "Loaded Chicken Fries", category: "Fries & Sides", diningHall: "Canyon Vista", emoji: "🍟", tags: ["cheesy", "filling", "comfort"], description: "Fries topped with chicken and cheese.", allergens: ["gluten", "dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-canyon-vista-loaded-chicken-fries-fa3e7c7b" },
+  { id: "d_taco_sampler", name: "Taco Sampler Plate", category: "Tacos & Mexican", diningHall: "Sixth", emoji: "🌮", tags: ["spicy", "savory", "flavorful"], description: "A mix of tacos to try.", allergens: ["dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-sixth-taco-sampler-plate-31a971eb" },
+  { id: "d_tonkotsu_ramen", name: "Tonkotsu Pork Ramen", category: "Noodles & Pasta", diningHall: "Sixth", emoji: "🍜", tags: ["savory", "flavorful", "comfort"], description: "Rich pork-broth ramen.", allergens: ["gluten", "eggs", "soy", "sesame"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-sixth-tonkotsu-pork-ramen-8f9f1e72" },
+  { id: "d_smoked_brisket", name: "Smoked Beef Brisket Plate", category: "Plates", diningHall: "Sixth", emoji: "🥩", tags: ["savory", "filling", "comfort"], description: "Smoked brisket with sides.", allergens: [], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-sixth-smoked-beef-brisket-plate-0e0a6edb" },
+  { id: "d_lava_poke", name: "Lava Poke Bowl with Rice", category: "Sushi & Poke", diningHall: "Sixth", emoji: "🌋", tags: ["spicy", "fresh"], description: "Poke with a spicy lava sauce.", allergens: ["fish", "soy", "sesame", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-sixth-lava-poke-bowl-with-rice-cbb178d5" },
+  { id: "d_birria_fries", name: "Birria Loaded Fries", category: "Fries & Sides", diningHall: "Sixth", emoji: "🍟", tags: ["spicy", "savory", "cheesy"], description: "Fries loaded with birria and cheese.", allergens: ["dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-sixth-birria-loaded-fries-6775872d" },
+  { id: "d_banana_pudding", name: "Banana Pudding", category: "Desserts", diningHall: "Sixth", emoji: "🍌", tags: ["sweet", "comfort"], description: "Layers of pudding, banana and wafers.", allergens: ["dairy", "eggs", "gluten"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-sixth-banana-pudding-aead7eed" },
+  { id: "d_garlic_butter_shrimp", name: "Garlic Butter Shrimp Plate", category: "Plates", diningHall: "Pines", emoji: "🍤", tags: ["savory", "flavorful"], description: "Shrimp in garlic butter.", allergens: ["shellfish", "dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-pines-garlic-butter-shrimp-plate-e34652c8" },
+  { id: "d_bun_cha", name: "Bun Cha Pork Belly Noodle Bowl", category: "Noodles & Pasta", diningHall: "Pines", emoji: "🥢", tags: ["savory", "tangy", "fresh"], description: "Vietnamese-style pork belly with noodles.", allergens: ["fish", "soy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-pines-bun-cha-pork-belly-noodle-bowl-535fb3eb" },
+  { id: "d_spicy_tuna_roll", name: "Spicy Tuna Roll", category: "Sushi & Poke", diningHall: "The Bistro", emoji: "🍣", tags: ["spicy", "fresh", "light"], description: "Classic spicy tuna roll.", allergens: ["fish", "soy", "sesame", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/the-bistro-spicy-tuna-roll" },
+  { id: "d_detroit_pizza", name: "Classic Red Top Detroit Style Pizza", category: "Pizza", diningHall: "OceanView", emoji: "🍕", tags: ["cheesy", "savory", "comfort"], description: "Square pizza with crispy cheese edges.", allergens: ["gluten", "dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-oceanview-classic-red-top-detroit-style-pizza-d7c22c72" },
+  { id: "d_philly_cheesesteak", name: "Philly Cheesesteak", category: "Burgers & Sandwiches", diningHall: "OceanView", emoji: "🥖", tags: ["cheesy", "savory", "filling"], description: "Steak and melted cheese on a roll.", allergens: ["gluten", "dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-oceanview-philly-cheesesteak-40847567" },
+  { id: "d_margherita_pizza", name: "Personal Margherita Pizza", category: "Pizza", diningHall: "Foodworx", emoji: "🍕", tags: ["cheesy", "fresh", "light"], description: "Tomato, mozzarella and basil.", allergens: ["gluten", "dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-foodworx-personal-margherita-pizza-73ff76e9" },
+  { id: "d_belgian_waffle", name: "Belgian Waffle", category: "Breakfast", diningHall: "Ventanas", emoji: "🧇", tags: ["sweet", "comfort"], description: "Thick, crispy waffle.", allergens: ["gluten", "dairy", "eggs"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-ventanas-belgian-waffle-de201cb4" },
+  { id: "d_caribbean_curry_pasta", name: "Caribbean Curry Pasta", category: "Noodles & Pasta", diningHall: "Ventanas", emoji: "🍝", tags: ["spicy", "flavorful"], description: "Pasta in a Caribbean curry sauce.", allergens: ["gluten", "dairy"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-ventanas-caribbean-curry-pasta-d658afed" },
+  { id: "d_matcha_oats", name: "Strawberry Matcha Overnight Oats", category: "Breakfast", diningHall: "Seventh Market", emoji: "🍓", tags: ["sweet", "fresh", "healthy"], description: "Overnight oats with matcha and strawberry.", allergens: ["dairy", "gluten"], photoCredit: "Triton Taste", sourceUrl: "https://tritontaste.com/dishes/community-seventh-market-strawberry-matcha-overnight-oats-5d274c0a" },
 ];
 
+// Placeholder dishes from earlier versions of the seed, removed when it runs again
+const OLD_ITEM_IDS = [
+  "i_katsu", "i_poke", "i_pepperoni", "i_margherita", "i_carnitas", "i_veggie_tacos", "i_burger",
+  "i_plant_burger", "i_ramen", "i_pad_thai", "i_cookie", "i_cheesecake", "i_wings", "i_mac",
+];
+
+// Sample accounts: they exist only so Explore and the Home feed have something to
+// show on day one. Flagged `demo: true`, so they never appear as classmates or friends.
 const USERS = [
-  { id: "u_cris", name: "Cris", handle: "cris", bio: "Will try anything once. Ramen over everything.", prefs: ["spicy", "savory", "comfort"], favorites: ["i_ramen", "i_pepperoni", "i_wings"], friends: ["u_miguel", "u_ana", "u_dev"], following: ["u_sofia"], freeMinutes: 60, zone: "Geisel" },
-  { id: "u_miguel", name: "Miguel", handle: "miguelito", bio: "Taco Tuesday is every day.", prefs: ["spicy", "savory", "crunchy"], favorites: ["i_carnitas", "i_pepperoni", "i_burger"], friends: ["u_cris", "u_ana"], following: ["u_sofia", "u_jay"], freeMinutes: 45, zone: "Price Center" },
-  { id: "u_ana", name: "Ana", handle: "ana.eats", bio: "Vegetarian. Dessert first.", prefs: ["vegetarian", "sweet", "healthy"], favorites: ["i_veggie_tacos", "i_cheesecake", "i_margherita"], friends: ["u_cris", "u_miguel"], following: [] },
-  { id: "u_jay", name: "Jay", handle: "jay", bio: "Poke bowl enjoyer. Gym after.", prefs: ["healthy", "light"], favorites: ["i_poke", "i_pad_thai"], friends: ["u_sofia"], following: ["u_cris"], freeMinutes: 30, zone: "Sixth" },
-  { id: "u_sofia", name: "Sofia", handle: "sofiafood", bio: "Honest reviews since week 1.", prefs: ["sweet", "cheesy", "comfort"], favorites: ["i_mac", "i_cookie", "i_katsu"], friends: ["u_jay"], following: [] },
-  { id: "u_dev", name: "Dev", handle: "dev", bio: "Plant-based, still loves a good burger.", prefs: ["vegan", "savory", "spicy"], favorites: ["i_plant_burger", "i_veggie_tacos", "i_ramen"], friends: ["u_cris"], following: ["u_ana"] },
+  { id: "u_cris", name: "Cris", handle: "cris", bio: "Will try anything once.", prefs: ["spicy", "savory", "flavorful"], favorites: ["d_tonkotsu_ramen", "d_detroit_pizza", "d_buffalo_chicken_sandwich"], friends: ["u_miguel", "u_ana", "u_dev"], following: ["u_sofia"] },
+  { id: "u_miguel", name: "Miguel", handle: "miguelito", bio: "Taco Tuesday is every day.", prefs: ["spicy", "savory", "filling"], favorites: ["d_taco_sampler", "d_birria_fries", "d_korean_bbq_smash"], friends: ["u_cris", "u_ana", "u_jay"], following: ["u_sofia"] },
+  { id: "u_ana", name: "Ana", handle: "ana.eats", bio: "Dessert first.", prefs: ["sweet", "fresh", "healthy"], favorites: ["d_acai_bowl", "d_tres_leches", "d_matcha_oats"], friends: ["u_cris", "u_miguel", "u_sofia", "u_dev"], following: [] },
+  { id: "u_jay", name: "Jay", handle: "jay", bio: "Poke bowl enjoyer. Gym after.", prefs: ["fresh", "light", "healthy"], favorites: ["d_cv_poke", "d_spicy_tuna_roll"], friends: ["u_sofia", "u_miguel", "u_dev"], following: ["u_cris"] },
+  { id: "u_sofia", name: "Sofia", handle: "sofiafood", bio: "Honest reviews since week 1.", prefs: ["sweet", "cheesy", "comfort"], favorites: ["d_philly_cheesesteak", "d_banana_pudding", "d_churro_french_toast"], friends: ["u_jay", "u_ana", "u_dev"], following: [] },
+  { id: "u_dev", name: "Dev", handle: "dev", bio: "Mostly plants, sometimes brisket.", prefs: ["spicy", "savory", "healthy"], favorites: ["d_dobu_jorim_tofu", "d_thai_coconut_chicken", "d_smoked_brisket"], friends: ["u_cris", "u_ana", "u_jay", "u_sofia"], following: [] },
 ];
 
+// Every review is co-written by the two people who ate together.
+// These are sample takes we wrote, not real reviews from any site.
 const REVIEWS = [
-  { id: "r_1", itemId: "i_ramen", inviteId: "m_1", ownerId: "u_cris", authorIds: ["u_cris", "u_dev"], parts: { u_cris: "The chili oil actually has heat. Get the extra egg.", u_dev: "Broth was great, but I wish there was a tofu option." }, upvotes: ["u_miguel", "u_ana"], ago: DAY },
-  { id: "r_2", itemId: "i_carnitas", inviteId: null, ownerId: "u_miguel", authorIds: ["u_miguel"], parts: { u_miguel: "The salsa verde carries. Ask for extra onions." }, upvotes: ["u_cris"], ago: 2 * DAY },
-  { id: "r_3", itemId: "i_burger", inviteId: "m_2", ownerId: "u_sofia", authorIds: ["u_sofia", "u_jay"], parts: { u_sofia: "Better than it needs to be. The sauce is the move.", u_jay: "Too heavy before the gym, but I get the hype." }, upvotes: ["u_cris", "u_miguel"], ago: 3 * HOUR },
-  { id: "r_4", itemId: "i_cheesecake", inviteId: null, ownerId: "u_ana", authorIds: ["u_ana"], parts: { u_ana: "Creamy, not too sweet. Goes fast after 1pm." }, upvotes: ["u_sofia"], ago: 5 * HOUR },
-  { id: "r_5", itemId: "i_poke", inviteId: null, ownerId: "u_jay", authorIds: ["u_jay"], parts: { u_jay: "Fresh salmon, generous portion. Skip the spicy mayo." }, upvotes: [], ago: 4 * DAY },
-  { id: "r_6", itemId: "i_pepperoni", inviteId: "m_3", ownerId: "u_cris", authorIds: ["u_cris", "u_miguel"], parts: { u_cris: "Depends on timing. A fresh slice is elite.", u_miguel: "Never had a bad one. Cris is too picky." }, upvotes: ["u_ana", "u_dev", "u_sofia"], ago: 6 * DAY },
-  { id: "r_7", itemId: "i_veggie_tacos", inviteId: null, ownerId: "u_dev", authorIds: ["u_dev"], parts: { u_dev: "Best vegan option on campus. The crema makes it." }, upvotes: ["u_ana"], ago: 2 * DAY },
-  { id: "r_8", itemId: "i_mac", inviteId: null, ownerId: "u_sofia", authorIds: ["u_sofia"], parts: { u_sofia: "Crunchy top, creamy middle. Comfort food done right." }, upvotes: ["u_miguel"], ago: DAY },
-];
-
-const MEALS = [
-  { id: "m_1", fromId: "u_cris", toIds: ["u_dev"], itemId: "i_ramen", reviewId: "r_1", ago: DAY },
-  { id: "m_2", fromId: "u_sofia", toIds: ["u_jay"], itemId: "i_burger", reviewId: "r_3", ago: 3 * HOUR },
-  { id: "m_3", fromId: "u_cris", toIds: ["u_miguel"], itemId: "i_pepperoni", reviewId: "r_6", ago: 6 * DAY },
+  { id: "r_1", itemId: "d_tonkotsu_ramen", authorIds: ["u_cris", "u_dev"], parts: { u_cris: "Broth is rich. Add chili oil and it's perfect.", u_dev: "Heavy but worth it on a cold day." }, upvotes: ["u_miguel", "u_ana"], ago: 5 * HOUR },
+  { id: "r_2", itemId: "d_taco_sampler", authorIds: ["u_miguel", "u_cris"], parts: { u_miguel: "Get it to try everything, then come back for your favorite.", u_cris: "The spicy one was the best by far." }, upvotes: ["u_ana", "u_jay"], ago: 2 * DAY },
+  { id: "r_3", itemId: "d_korean_bbq_smash", authorIds: ["u_sofia", "u_jay"], parts: { u_sofia: "The sauce makes it. Crispy edges on the patty.", u_jay: "Too heavy before the gym, but I get the hype." }, upvotes: ["u_cris", "u_miguel"], ago: 3 * HOUR },
+  { id: "r_4", itemId: "d_tres_leches", authorIds: ["u_ana", "u_sofia"], parts: { u_ana: "Soft and not too sweet. Goes fast.", u_sofia: "Get it before the dinner rush." }, upvotes: ["u_dev"], ago: 7 * HOUR },
+  { id: "r_5", itemId: "d_cv_poke", authorIds: ["u_jay", "u_ana"], parts: { u_jay: "Load up on the fish, go light on sauce.", u_ana: "Light enough for a lecture right after." }, upvotes: ["u_sofia", "u_dev"], ago: 4 * DAY },
+  { id: "r_6", itemId: "d_detroit_pizza", authorIds: ["u_cris", "u_miguel"], parts: { u_cris: "The cheesy corners are the whole point.", u_miguel: "Two slices and I'm done for the day." }, upvotes: ["u_ana", "u_dev", "u_sofia"], ago: 6 * DAY },
+  { id: "r_7", itemId: "d_dobu_jorim_tofu", authorIds: ["u_dev", "u_ana"], parts: { u_dev: "Best tofu on campus. Actually has flavor.", u_ana: "A little spicy, which I didn't expect. Loved it." }, upvotes: ["u_cris"], ago: 2 * DAY },
+  { id: "r_8", itemId: "d_philly_cheesesteak", authorIds: ["u_sofia", "u_miguel"], parts: { u_sofia: "So much cheese. No complaints.", u_miguel: "Got a second one. No regrets." }, upvotes: ["u_jay"], ago: DAY },
+  { id: "r_9", itemId: "d_birria_fries", authorIds: ["u_jay", "u_dev"], parts: { u_jay: "Huge portion. Split it with someone.", u_dev: "The consommé on the side is the move." }, upvotes: ["u_sofia", "u_miguel"], ago: 9 * HOUR },
+  { id: "r_10", itemId: "d_buffalo_chicken_sandwich", authorIds: ["u_miguel", "u_jay"], parts: { u_miguel: "Real buffalo heat, not the sad kind.", u_jay: "Messy but worth it. Bring napkins." }, upvotes: ["u_cris"], ago: 3 * DAY },
+  { id: "r_11", itemId: "d_acai_bowl", authorIds: ["u_ana", "u_cris"], parts: { u_ana: "Fresh fruit and the granola stays crunchy.", u_cris: "Good, but I'm still hungry after." }, upvotes: ["u_jay"], ago: 5 * DAY },
+  { id: "r_12", itemId: "d_banana_pudding", authorIds: ["u_sofia", "u_dev"], parts: { u_sofia: "Tastes like home. Get the corner piece.", u_dev: "Sweet, simple, gone in a minute." }, upvotes: ["u_ana", "u_miguel"], ago: 30 * HOUR },
 ];
 
 export async function seedDemoData() {
   const now = Date.now();
   const demoIds = new Set(USERS.map((u) => u.id));
 
-  // Existing (non-demo) users get connected to Cris and Miguel
   const snap = await getDocs(collection(db, "users"));
-  const realIds = snap.docs.map((d) => d.id).filter((id) => !demoIds.has(id));
+  const classmateIds = snap.docs.map((d) => d.id).filter((id) => !demoIds.has(id));
 
   const batch = writeBatch(db);
 
   ITEMS.forEach(({ id, ...item }) => {
-    batch.set(doc(db, "items", id), { photoURL: "", ...item });
+    batch.set(doc(db, "items", id), { photoURL: "", photoCredit: "", sourceUrl: "", ...item });
   });
 
-  USERS.forEach(({ id, freeMinutes, zone, friends, ...user }) => {
-    const connectReal = id === "u_cris" || id === "u_miguel";
+  USERS.forEach(({ id, ...user }) => {
     batch.set(doc(db, "users", id), {
       ...user,
-      friends: connectReal ? [...friends, ...realIds] : friends,
+      demo: true,
+      allergens: [],
+      shareAllergens: false,
       photoURL: "",
       createdAt: now - 45 * DAY,
-      status: freeMinutes
-        ? { free: true, zone, until: now + freeMinutes * MIN }
-        : { free: false, zone: "", until: 0 },
+      status: { free: false, zone: "", until: 0 },
     });
   });
 
-  realIds.forEach((id) => {
-    batch.set(
-      doc(db, "users", id),
-      {
-        friends: arrayUnion("u_cris", "u_miguel"),
-        following: arrayUnion("u_sofia"),
-      },
-      { merge: true }
-    );
+  // Everyone in the class is friends with everyone else (and not with sample accounts)
+  classmateIds.forEach((id) => {
+    batch.set(doc(db, "users", id), { friends: classmateIds.filter((other) => other !== id) }, { merge: true });
   });
 
+  // Each sample review comes from a finished meal (the first author sent the invite)
   REVIEWS.forEach(({ id, ago, ...review }) => {
-    batch.set(doc(db, "reviews", id), { ...review, photo: "", createdAt: now - ago });
-  });
-
-  MEALS.forEach(({ id, ago, ...meal }) => {
-    batch.set(doc(db, "invites", id), {
-      ...meal,
+    const mealId = `m_${id}`;
+    const [fromId, ...toIds] = review.authorIds;
+    const at = now - ago;
+    batch.set(doc(db, "reviews", id), {
+      ...review,
+      inviteId: mealId,
+      ownerId: fromId,
+      photo: "",
+      createdAt: at,
+    });
+    batch.set(doc(db, "invites", mealId), {
+      fromId,
+      toIds,
+      itemId: review.itemId,
       urgency: "now",
       visibility: "friends",
       note: "",
-      meetAt: now - ago,
-      expiresAt: now - ago + 15 * MIN,
-      responses: Object.fromEntries(meal.toIds.map((t) => [t, "down"])),
+      meetAt: at - 40 * MIN,
+      expiresAt: at - 25 * MIN,
+      responses: Object.fromEntries(toIds.map((t) => [t, "down"])),
       status: "done",
-      ateAt: now - ago,
-      doneAt: now - ago,
-      createdAt: now - ago - 10 * MIN,
+      ateAt: at - 40 * MIN,
+      doneAt: at,
+      reviewId: id,
+      createdAt: at - 50 * MIN,
     });
   });
 
-  // An open table anyone can join
-  batch.set(doc(db, "invites", "t_open"), {
-    fromId: "u_miguel",
-    toIds: ["u_cris"],
-    itemId: "i_carnitas",
-    urgency: "20",
-    visibility: "anyone",
-    note: "Taco run, table's open",
-    meetAt: now + 20 * MIN,
-    expiresAt: now + 35 * MIN,
-    responses: {},
-    status: "open",
-    createdAt: now,
+  // Leftovers from older versions of the seed
+  ["t_open", "t_cris", "m_1", "m_2", "m_3"].forEach((id) => batch.delete(doc(db, "invites", id)));
+  OLD_ITEM_IDS.forEach((id) => batch.delete(doc(db, "items", id)));
+
+  await batch.commit();
+}
+
+// ---- Placeholder friend activity ----
+// Run this once classmates have joined (e.g. at the start of the demo), so
+// everyone's "From your friends" feed has something to act on:
+//  - each classmate likes a couple of sample posts that fit their taste
+//  - pairs of classmates get a placeholder collab post, labeled "Demo post"
+// Everything it creates is flagged `demoActivity: true` so it can be removed.
+
+const DEMO_TAKES = [
+  "Would get this again.",
+  "Better than I expected.",
+  "Solid pick for a quick lunch.",
+  "Came hungry, left full.",
+  "Good, but I'd add more sauce.",
+  "My new go-to.",
+  "Worth the line.",
+  "Exactly what I was craving.",
+];
+
+function tasteScore(item, user) {
+  const prefs = new Set((user.prefs || []).map((p) => String(p).toLowerCase()));
+  return (item.tags || []).filter((t) => prefs.has(t)).length;
+}
+
+function safeFor(item, user) {
+  const mine = new Set((user.allergens || []).map((a) => String(a).toLowerCase()));
+  return !(item.allergens || []).some((a) => mine.has(a));
+}
+
+export async function seedFriendActivity() {
+  const now = Date.now();
+  const snap = await getDocs(collection(db, "users"));
+  const classmates = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => !u.demo);
+  if (classmates.length === 0) throw new Error("No classmates have joined yet.");
+
+  const itemsById = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+  const batch = writeBatch(db);
+
+  // 1) Likes: each classmate likes the 2 sample posts closest to their taste
+  const likes = Object.fromEntries(REVIEWS.map((r) => [r.id, [...r.upvotes]]));
+  classmates.forEach((u, idx) => {
+    REVIEWS.map((r, i) => ({ r, score: tasteScore(itemsById[r.itemId], u) * 10 - ((i + idx) % REVIEWS.length) }))
+      .filter(({ r }) => safeFor(itemsById[r.itemId], u))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2)
+      .forEach(({ r }) => likes[r.id].push(u.id));
+  });
+  Object.entries(likes).forEach(([id, upvotes]) => {
+    batch.update(doc(db, "reviews", id), { upvotes: [...new Set(upvotes)] });
   });
 
-  // A live invite from Cris to your real users
-  if (realIds.length) {
-    batch.set(doc(db, "invites", "t_cris"), {
-      fromId: "u_cris",
-      toIds: realIds,
-      itemId: "i_ramen",
-      urgency: "10",
+  // 2) Placeholder collab posts: pair classmates up and pick a dish that fits both
+  const pool = [...classmates];
+  let n = 0;
+  while (pool.length >= 2 && n < 6) {
+    const a = pool.shift();
+    pool.sort((x, y) => tasteScore({ tags: y.prefs }, a) - tasteScore({ tags: x.prefs }, a));
+    const b = pool.shift();
+    const item = [...ITEMS]
+      .filter((i) => safeFor(i, a) && safeFor(i, b))
+      .sort((x, y) => tasteScore(y, a) + tasteScore(y, b) - (tasteScore(x, a) + tasteScore(x, b)))[n % 3];
+    if (!item) continue;
+    const at = now - (n + 1) * 2 * HOUR;
+    const reviewRef = doc(collection(db, "reviews"));
+    const mealRef = doc(collection(db, "invites"));
+    batch.set(reviewRef, {
+      itemId: item.id,
+      inviteId: mealRef.id,
+      ownerId: a.id,
+      authorIds: [a.id, b.id],
+      parts: { [a.id]: DEMO_TAKES[(2 * n) % DEMO_TAKES.length], [b.id]: DEMO_TAKES[(2 * n + 1) % DEMO_TAKES.length] },
+      photo: "",
+      upvotes: [],
+      createdAt: at,
+      demoActivity: true,
+    });
+    batch.set(mealRef, {
+      fromId: a.id,
+      toIds: [b.id],
+      itemId: item.id,
+      urgency: "now",
       visibility: "friends",
-      note: "Ramen after class?",
-      meetAt: now + 10 * MIN,
-      expiresAt: now + 25 * MIN,
-      responses: {},
-      status: "open",
-      createdAt: now,
+      note: "",
+      meetAt: at - 40 * MIN,
+      expiresAt: at - 25 * MIN,
+      responses: { [b.id]: "down" },
+      status: "done",
+      ateAt: at - 40 * MIN,
+      doneAt: at,
+      reviewId: reviewRef.id,
+      createdAt: at - 50 * MIN,
+      demoActivity: true,
     });
+    n += 1;
   }
 
   await batch.commit();
+  return { classmates: classmates.length, posts: n };
+}
+
+export async function clearFriendActivity() {
+  const batch = writeBatch(db);
+  const [reviewsSnap, invitesSnap] = await Promise.all([
+    getDocs(query(collection(db, "reviews"), where("demoActivity", "==", true))),
+    getDocs(query(collection(db, "invites"), where("demoActivity", "==", true))),
+  ]);
+  reviewsSnap.docs.forEach((d) => batch.delete(d.ref));
+  invitesSnap.docs.forEach((d) => batch.delete(d.ref));
+  // Put the sample posts' likes back to how they started
+  REVIEWS.forEach((r) => batch.update(doc(db, "reviews", r.id), { upvotes: r.upvotes }));
+  await batch.commit();
+  return reviewsSnap.size;
 }

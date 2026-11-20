@@ -17,17 +17,36 @@ export const ZONES = [
   "Eighth",
 ];
 
+// General flavor words people pick for their "food profile". Kept broad on purpose:
+// they're a lead for matching, not a full description of someone's taste.
+// Dish tags use the same words so matching works.
 export const PREFS = [
   "spicy",
   "savory",
   "sweet",
+  "fresh",
+  "filling",
+  "flavorful",
+  "light",
   "cheesy",
   "crunchy",
+  "tangy",
   "comfort",
   "healthy",
-  "light",
-  "vegetarian",
-  "vegan",
+];
+
+export const MAX_PREFS = 4;
+
+export const ALLERGENS = [
+  "peanuts",
+  "tree nuts",
+  "dairy",
+  "eggs",
+  "gluten",
+  "soy",
+  "fish",
+  "shellfish",
+  "sesame",
 ];
 
 export const arr = (x) => (Array.isArray(x) ? x : []);
@@ -90,9 +109,58 @@ export function mutualFriends(a, b) {
   return arr(a?.friends).filter((id) => theirs.has(id));
 }
 
+const norm = (s) => String(s || "").trim().toLowerCase();
+
+// Everything a food keyword can match on a dish: its tags, category and name words
+export function itemKeywords(item) {
+  const words = [
+    ...arr(item?.tags),
+    item?.category,
+    ...norm(item?.name).split(/\s+/),
+  ].map(norm).filter(Boolean);
+  return new Set(words);
+}
+
+// Which of this person's food keywords the dish matches
 export function sharedTags(item, user) {
-  const prefs = new Set(arr(user?.prefs));
-  return arr(item?.tags).filter((t) => prefs.has(t));
+  const keys = itemKeywords(item);
+  return [...new Set(arr(user?.prefs).map(norm))].filter((p) => keys.has(p));
+}
+
+// Food keywords two people have in common
+export function sharedPrefs(a, b) {
+  const theirs = new Set(arr(b?.prefs).map(norm));
+  return [...new Set(arr(a?.prefs).map(norm))].filter((p) => theirs.has(p));
+}
+
+// Allergens on this dish that the person listed
+export function allergyConflicts(item, user) {
+  const mine = new Set(arr(user?.allergens).map(norm));
+  return arr(item?.allergens).map(norm).filter((a) => mine.has(a));
+}
+
+// Friends ranked by how much food taste they share with me
+export function tasteMatches(me, people) {
+  return people
+    .map((u) => ({ u, shared: sharedPrefs(me, u) }))
+    .filter((x) => x.shared.length > 0)
+    .sort((a, b) => b.shared.length - a.shared.length || (a.u.name || "").localeCompare(b.u.name || ""));
+}
+
+// Dishes that work for a whole group: skips anything that conflicts with ANYONE's
+// allergens (without saying whose), then ranks by favorites and shared keywords.
+export function groupPicks(people, items, limit = 6) {
+  return items
+    .filter((item) => people.every((p) => allergyConflicts(item, p).length === 0))
+    .map((item) => {
+      const fans = people.filter((p) => arr(p.favorites).includes(item.id));
+      const matches = people.map((p) => ({ p, tags: sharedTags(item, p) })).filter((x) => x.tags.length);
+      const score = fans.length * 3 + matches.reduce((n, x) => n + x.tags.length, 0) + (matches.length === people.length ? 2 : 0);
+      return { item, fans, matches, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || (a.item.name || "").localeCompare(b.item.name || ""))
+    .slice(0, limit);
 }
 
 export function joinNames(names) {
@@ -138,7 +206,7 @@ export function whenLabel(invite, now) {
       minute: "2-digit",
     });
   }
-  if (invite.meetAt <= now) return "right now";
+  if (invite.urgency === "now" || invite.meetAt <= now) return "right now";
   return `in ${Math.ceil((invite.meetAt - now) / MIN)} min`;
 }
 
