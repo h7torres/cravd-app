@@ -4,7 +4,14 @@ export const MIN = 60 * 1000;
 export const HOUR = 60 * MIN;
 export const DAY = 24 * HOUR;
 
+// For the class demo, everyone who signs up or opens the app shows up as active
+// for this long, so the Active now list is full. They can still turn it off.
+export const DEMO_ACTIVE_MINUTES = 120;
+// The dining hall closest to our class
+export const DEFAULT_ZONE = "64 Degrees";
+
 export const ZONES = [
+  "64 Degrees",
   "Geisel",
   "Price Center",
   "Revelle",

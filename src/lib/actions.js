@@ -184,7 +184,7 @@ export function toggleUpvote(reviewId, uid, hasUpvoted) {
 // No sign-in for the class prototype: a profile is just a name + food profile.
 // The class is small, so every new person becomes friends with every classmate
 // already on Cravd (both directions). Demo/sample accounts are left out.
-export async function createProfile({ name, prefs, allergens, shareAllergens, classmateIds }) {
+export async function createProfile({ name, prefs, allergens, shareAllergens, classmateIds, zone, activeMinutes }) {
   const ref = doc(collection(db, "users"));
   const now = Date.now();
   const batch = writeBatch(db);
@@ -199,7 +199,10 @@ export async function createProfile({ name, prefs, allergens, shareAllergens, cl
     favorites: [],
     friends: classmateIds,
     following: [],
-    status: { free: false, zone: "", until: 0 },
+    // New people start out active so they show up in everyone's Active now list
+    status: activeMinutes
+      ? { free: true, zone: zone || "", until: now + activeMinutes * MIN }
+      : { free: false, zone: "", until: 0 },
     createdAt: now,
   });
   classmateIds.forEach((id) => {
@@ -238,4 +241,18 @@ export function logEvent(type, data = {}) {
   return addDoc(collection(db, "events"), { type, ...data, at: Date.now() }).catch((err) =>
     console.warn("Couldn't log event", err)
   );
+}
+
+// Facilitator tool: mark every classmate as active (sample accounts excluded)
+export function makeEveryoneActive(users, minutes, defaultZone) {
+  const batch = writeBatch(db);
+  const until = Date.now() + minutes * MIN;
+  users
+    .filter((u) => !u.demo)
+    .forEach((u) => {
+      batch.update(doc(db, "users", u.id), {
+        status: { free: true, zone: u.status?.zone || defaultZone, until },
+      });
+    });
+  return batch.commit();
 }

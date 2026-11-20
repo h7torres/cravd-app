@@ -2,9 +2,18 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 import { useData } from "../context/DataContext";
-import { createProfile } from "../lib/actions";
+import { createProfile, makeEveryoneActive, setStatus } from "../lib/actions";
 import { clearFriendActivity, seedDemoData, seedFriendActivity } from "../lib/seed";
-import { ALLERGENS, handleOf, itemKeywords, MAX_PREFS, PREFS } from "../lib/helpers";
+import {
+  ALLERGENS,
+  DEFAULT_ZONE,
+  DEMO_ACTIVE_MINUTES,
+  handleOf,
+  isFree,
+  itemKeywords,
+  MAX_PREFS,
+  PREFS,
+} from "../lib/helpers";
 import Avatar from "../components/Avatar";
 
 // Onboarding for the class prototype: name + food profile, no sign-in.
@@ -44,6 +53,12 @@ export default function Login() {
   }
 
   function enter(user) {
+    // Coming back in during the demo puts you back on everyone's Active now list
+    if (!isFree(user, Date.now())) {
+      setStatus(user.id, { free: true, zone: user.status?.zone || DEFAULT_ZONE, minutes: DEMO_ACTIVE_MINUTES }).catch(
+        (err) => console.error(err)
+      );
+    }
     login(user.id);
     navigate("/");
   }
@@ -60,6 +75,8 @@ export default function Login() {
         allergens,
         shareAllergens,
         classmateIds: classmates.map((u) => u.id),
+        zone: DEFAULT_ZONE,
+        activeMinutes: DEMO_ACTIVE_MINUTES,
       });
       login(id);
       navigate("/");
@@ -89,6 +106,17 @@ export default function Login() {
     } catch (err) {
       console.error(err);
       setSeedMsg("Couldn't remove friend activity.");
+    }
+  }
+
+  async function everyoneActive() {
+    setSeedMsg("Marking everyone active…");
+    try {
+      await makeEveryoneActive(users, DEMO_ACTIVE_MINUTES, DEFAULT_ZONE);
+      setSeedMsg(`Everyone is active for the next ${DEMO_ACTIVE_MINUTES / 60} hours.`);
+    } catch (err) {
+      console.error(err);
+      setSeedMsg("Couldn't update everyone's status.");
     }
   }
 
@@ -243,6 +271,11 @@ export default function Login() {
               </button>
               <button className="btn btn-small" onClick={removeActivity}>
                 Remove friend activity
+              </button>
+            </div>
+            <div>
+              <button className="btn btn-small" onClick={everyoneActive}>
+                Make everyone active
               </button>
             </div>
             {seedMsg && <p className="small">{seedMsg}</p>}
