@@ -40,7 +40,7 @@ export default function ItemDetail() {
 
   const inviteHref = `/invite/new?item=${item.id}${
     friendFans.length ? `&to=${friendFans.map((f) => f.id).join(",")}` : ""
-  }`;
+  }&src=dish_page`;
 
   return (
     <div className="stack">

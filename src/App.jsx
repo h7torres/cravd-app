@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Blend from "./pages/Blend";
 import Meal from "./pages/Meal";
 import NotFound from "./pages/NotFound";
+import Results from "./pages/Results";
 import Messages from "./pages/Messages";
 import Thread from "./pages/Thread";
 
@@ -17,6 +18,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/results" element={<Results />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/explore" element={<Explore />} />

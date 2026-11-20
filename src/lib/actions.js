@@ -69,7 +69,8 @@ export function removeFriend(a, b) {
 
 const URGENCY_MINUTES = { now: 0, 10: 10, 20: 20 };
 
-export function sendInvite({ fromId, toIds, itemId, urgency, plannedFor, note, visibility }) {
+// `source` records which part of the app the invite came from (for the demo evaluation)
+export function sendInvite({ fromId, toIds, itemId, urgency, plannedFor, note, visibility, source, mode }) {
   const now = Date.now();
   const meetAt = urgency === "planned" ? plannedFor : now + URGENCY_MINUTES[urgency] * MIN;
   const expiresAt = urgency === "planned" ? meetAt + 60 * MIN : meetAt + 15 * MIN;
@@ -85,15 +86,23 @@ export function sendInvite({ fromId, toIds, itemId, urgency, plannedFor, note, v
     responses: {},
     status: "open",
     createdAt: now,
+    source: source || "other",
+    mode: mode || (toIds.length > 1 ? "group" : "single"),
   });
 }
 
 export function respondToInvite(inviteId, uid, response) {
-  return updateDoc(doc(db, "invites", inviteId), { [`responses.${uid}`]: response });
+  return updateDoc(doc(db, "invites", inviteId), {
+    [`responses.${uid}`]: response,
+    [`respondedAt.${uid}`]: Date.now(),
+  });
 }
 
 export function joinOpenTable(inviteId, uid) {
-  return updateDoc(doc(db, "invites", inviteId), { [`responses.${uid}`]: "down" });
+  return updateDoc(doc(db, "invites", inviteId), {
+    [`responses.${uid}`]: "down",
+    [`respondedAt.${uid}`]: Date.now(),
+  });
 }
 
 export function cancelInvite(inviteId) {
@@ -101,7 +110,10 @@ export function cancelInvite(inviteId) {
 }
 
 export function setInviteItem(inviteId, itemId) {
-  return updateDoc(doc(db, "invites", inviteId), { itemId: itemId || null });
+  return updateDoc(doc(db, "invites", inviteId), {
+    itemId: itemId || null,
+    ...(itemId ? { dishPickedAt: Date.now() } : {}),
+  });
 }
 
 // ---- Meals & collaborative reviews ----
@@ -218,4 +230,12 @@ export function addComment({ reviewId, authorId, text }) {
 
 export function deleteComment(commentId) {
   return deleteDoc(doc(db, "comments", commentId));
+}
+
+// ---- Evaluation events ----
+// Small, anonymous-enough log for the demo write-up. Never blocks the UI.
+export function logEvent(type, data = {}) {
+  return addDoc(collection(db, "events"), { type, ...data, at: Date.now() }).catch((err) =>
+    console.warn("Couldn't log event", err)
+  );
 }

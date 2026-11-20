@@ -19,21 +19,46 @@ export const ZONES = [
 
 // General flavor words people pick for their "food profile". Kept broad on purpose:
 // they're a lead for matching, not a full description of someone's taste.
-// Dish tags use the same words so matching works.
-export const PREFS = [
-  "spicy",
-  "savory",
-  "sweet",
-  "fresh",
-  "filling",
-  "flavorful",
-  "light",
-  "cheesy",
-  "crunchy",
-  "tangy",
-  "comfort",
-  "healthy",
-];
+//
+// The words and cues come from the ~250 dish names on the real UCSD dining menus
+// (via Triton Taste): each word is matched against words that actually show up in
+// dish names, so any dish gets flavor tags automatically from its name.
+export const FLAVOR_CUES = {
+  spicy: ["spicy", "chipotle", "chile", "chili", "buffalo", "jerk", "kimchi", "harissa", "sriracha", "ancho", "jalapeno", "jalapeño", "diablo", "lava", "hot", "gochujang", "szechuan", "sichuan", "birria", "al pastor", "cajun", "nashville"],
+  savory: ["savory", "garlic", "bbq", "teriyaki", "miso", "gravy", "brisket", "bacon", "sausage", "mushroom", "crimini", "parmesan", "peppered", "carne asada", "kalua", "bulgogi", "pork", "beef", "steak", "tri tip", "umami", "club", "blt", "stir fry", "udon"],
+  sweet: ["sweet", "cake", "cheesecake", "chocolate", "waffle", "pancake", "pancakes", "crepes", "crepe", "gelato", "pie", "pudding", "nutella", "strawberry", "mango", "banana", "vanilla", "churro", "french toast", "honey", "tart", "cookie", "brownie", "donut", "matcha", "acai", "parfait", "orange chicken", "beignets", "taiyaki", "frappe", "latte", "chai", "pumpkin"],
+  fresh: ["salad", "poke", "roll", "acai", "avocado", "ahi", "tuna", "salmon", "chop", "lemon", "yogurt", "parfait", "fruit", "herb", "cucumber", "ceviche", "banh mi", "mediterranean", "caprese", "fish taco", "oats"],
+  filling: ["loaded", "burrito", "burger", "cheeseburger", "fries", "mac", "brisket", "smash", "combo", "sampler", "loco moco", "plate", "steak", "meatball", "bolognese", "lasagna", "philly", "pot pie", "rigatoni", "fried rice", "hash"],
+  flavorful: ["curry", "thai", "korean", "shawarma", "kofta", "jerk", "bulgogi", "harissa", "tandoor", "pesto", "japchae", "banh", "birria", "kimchi", "pastor", "garlic", "miso", "mazza", "kalbi", "gochujang", "teriyaki", "szechuan", "masala", "gumbo", "sofrito", "cubano", "bibimbap", "mongolian", "huli", "dobu jorim", "bun cha", "rasta", "vietnamese", "udon"],
+  crispy: ["fried", "crispy", "tempura", "fries", "tots", "tater", "tenders", "wings", "katsu", "chips", "nachos", "crunch", "fritter", "tostada", "churro", "potstickers", "beignets"],
+  cheesy: ["cheese", "cheesy", "cheeseburger", "mac", "alfredo", "parmesan", "quesadilla", "nachos", "pizza", "mozzarella", "cheddar", "queso", "philly", "margherita"],
+  creamy: ["alfredo", "coconut", "curry", "pudding", "cheesecake", "mac", "gelato", "tres leches", "crepes", "creamy", "cream", "butter", "carbonara", "risotto", "yogurt", "chowder", "bisque", "rasta", "latte", "frappe"],
+  smoky: ["smoked", "chargrilled", "grilled", "bbq", "barbecue", "roasted", "seared", "tandoor", "brisket", "pulled", "charred", "kalua", "huli"],
+  comfort: ["mac", "pizza", "burger", "cheeseburger", "fries", "grilled cheese", "waffle", "pancake", "pancakes", "french toast", "tenders", "pot pie", "gravy", "chili", "loco moco", "meatball", "toast", "biscuit", "ramen", "pudding", "toasted cheese", "chowder", "oatmeal", "congee", "spaghetti", "banana pudding", "soup", "breadstick", "focaccia", "breakfast"],
+  healthy: ["salad", "poke", "grain", "tofu", "acai", "oats", "oatmeal", "chop", "veggie", "vegan", "quinoa", "steamed", "ahi", "lentil", "chana", "power bowl"],
+};
+
+// Phrases that would trigger the wrong word (grilled cheese isn't smoky, etc.)
+const FLAVOR_EXCLUDE = {
+  smoky: ["grilled cheese"],
+  spicy: ["hot chocolate", "hot cocoa"],
+  fresh: ["cinnamon roll", "egg roll"],
+};
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Flavor words a dish gets from its name alone
+export function flavorTags(name) {
+  const base = ` ${String(name || "").toLowerCase()} `;
+  return Object.entries(FLAVOR_CUES)
+    .filter(([word, cues]) => {
+      const text = (FLAVOR_EXCLUDE[word] || []).reduce((t, phrase) => t.split(phrase).join(" "), base);
+      return cues.some((cue) => new RegExp(`[^a-z]${escapeRe(cue)}[^a-z]`).test(text));
+    })
+    .map(([word]) => word);
+}
+
+export const PREFS = Object.keys(FLAVOR_CUES);
 
 export const MAX_PREFS = 4;
 
@@ -115,6 +140,7 @@ const norm = (s) => String(s || "").trim().toLowerCase();
 export function itemKeywords(item) {
   const words = [
     ...arr(item?.tags),
+    ...flavorTags(item?.name),
     item?.category,
     ...norm(item?.name).split(/\s+/),
   ].map(norm).filter(Boolean);
@@ -182,10 +208,12 @@ export function initials(name = "?") {
   );
 }
 
+const AVATAR_COLORS = ["#2742d6", "#12a16b", "#d93a3a", "#7048e8", "#e8590c", "#0b8a9c", "#c2255c", "#5c6bc0"];
+
 export function colorFor(key = "") {
   let h = 0;
-  for (const c of key) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `hsl(${h}, 55%, 55%)`;
+  for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
 export function handleOf(user) {
@@ -223,6 +251,22 @@ export function timeAgo(ms, now) {
   if (diff < HOUR) return `${Math.floor(diff / MIN)}m ago`;
   if (diff < DAY) return `${Math.floor(diff / HOUR)}h ago`;
   return `${Math.floor(diff / DAY)}d ago`;
+}
+
+// Rounds a time up to the next 15-minute mark (12:07 -> 12:15)
+export function nextQuarterHour(ms) {
+  const q = 15 * MIN;
+  return Math.ceil(ms / q) * q;
+}
+
+// "Free for" choices in 15-minute steps, up to 3 hours
+export const FREE_FOR_OPTIONS = Array.from({ length: 12 }, (_, i) => (i + 1) * 15);
+
+export function durationLabel(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
 }
 
 export function toLocalInput(ms) {

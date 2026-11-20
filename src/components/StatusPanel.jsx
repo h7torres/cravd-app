@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { setStatus } from "../lib/actions";
-import { clockTime, isFree, ZONES } from "../lib/helpers";
+import { clockTime, durationLabel, FREE_FOR_OPTIONS, isFree, ZONES } from "../lib/helpers";
 
 export default function StatusPanel({ me, now }) {
   const [zone, setZone] = useState(me.status?.zone || ZONES[0]);
@@ -35,9 +35,11 @@ export default function StatusPanel({ me, now }) {
           ))}
         </select>
         <select className="inline" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-          <option value={30}>for 30 min</option>
-          <option value={60}>for 1 hr</option>
-          <option value={120}>for 2 hrs</option>
+          {FREE_FOR_OPTIONS.map((m) => (
+            <option key={m} value={m}>
+              for {durationLabel(m)}
+            </option>
+          ))}
         </select>
         <button className="btn btn-primary" onClick={() => setStatus(me.id, { free: true, zone, minutes })}>
           I'm free

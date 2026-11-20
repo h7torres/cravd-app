@@ -5,7 +5,7 @@ import { db } from "../firebase";
 import { useData } from "../context/DataContext";
 import { respondToInvite } from "../lib/actions";
 import { sendThreadMessage } from "../lib/messages";
-import { arr, downIds, isLive, participants, toLocalInput, whenLabel } from "../lib/helpers";
+import { arr, downIds, isLive, nextQuarterHour, participants, toLocalInput, whenLabel } from "../lib/helpers";
 import DishThumb from "./DishThumb";
 
 export default function InviteMessageCard({ inviteId, now, onCounter }) {
@@ -60,7 +60,7 @@ export function InviteReplyControls({ invite, now, onCounter }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [proposedFor, setProposedFor] = useState(() => toLocalInput(Date.now() + 30 * 60000));
+  const [proposedFor, setProposedFor] = useState(() => toLocalInput(nextQuarterHour(Date.now() + 30 * 60000)));
   const [undoUntil, setUndoUntil] = useState(0);
   const [pendingCounter, setPendingCounter] = useState(null);
 
@@ -190,12 +190,12 @@ export function InviteReplyControls({ invite, now, onCounter }) {
           {oneToOne && pickerOpen && (
             <div className="stack invite-reply-picker">
               <div className="row wrap">
-                <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor(toLocalInput(Date.now() + 30 * 60000))}>In 30 min</button>
-                <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor(toLocalInput(Date.now() + 60 * 60000))}>In 1 hr</button>
+                <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor(toLocalInput(nextQuarterHour(Date.now() + 30 * 60000)))}>In 30 min</button>
+                <button type="button" className="chip" disabled={busy} onClick={() => setProposedFor(toLocalInput(nextQuarterHour(Date.now() + 60 * 60000)))}>In 1 hr</button>
                 <button type="button" className="chip" disabled={busy} onClick={chooseTomorrow}>Tomorrow</button>
               </div>
               <label className="small" htmlFor={`proposed-${invite.id}`}>Proposed time</label>
-              <input id={`proposed-${invite.id}`} type="datetime-local" value={proposedFor} min={toLocalInput(now)} onChange={(e) => setProposedFor(e.target.value)} />
+              <input id={`proposed-${invite.id}`} type="datetime-local" step={900} value={proposedFor} min={toLocalInput(now)} onChange={(e) => setProposedFor(e.target.value)} />
               <button type="button" className="btn btn-primary" disabled={busy} onClick={sendSuggestion}>Send suggestion</button>
             </div>
           )}

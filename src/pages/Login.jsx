@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 import { useData } from "../context/DataContext";
 import { createProfile } from "../lib/actions";
 import { clearFriendActivity, seedDemoData, seedFriendActivity } from "../lib/seed";
-import { ALLERGENS, handleOf, MAX_PREFS, PREFS } from "../lib/helpers";
+import { ALLERGENS, handleOf, itemKeywords, MAX_PREFS, PREFS } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 
 // Onboarding for the class prototype: name + food profile, no sign-in.
 export default function Login() {
-  const { users, ready } = useData();
+  const { users, items, ready } = useData();
   const { login } = useUser();
   const navigate = useNavigate();
 
@@ -26,6 +26,13 @@ export default function Login() {
   const classmates = users
     .filter((u) => !u.demo)
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  // A couple of real dishes for each flavor word, so people know what it means here
+  const examplesFor = (word) =>
+    items
+      .filter((i) => itemKeywords(i).has(word))
+      .slice(0, 2)
+      .map((i) => i.name);
+
   const sameName = classmates.find(
     (u) => (u.name || "").trim().toLowerCase() === name.trim().toLowerCase()
   );
@@ -100,8 +107,10 @@ export default function Login() {
     <div className="app-shell">
       <main className="page stack">
         <div className="hero">
-          <h1>Cravd</h1>
-          <p className="muted">Shared taste, shared meals.</p>
+          <span className="wordmark" role="heading" aria-level={1}>
+            cravd<span>.</span>
+          </span>
+          <p className="muted">Find who's free, pick a dish, eat together.</p>
         </div>
 
         <div className="tabs">
@@ -136,7 +145,8 @@ export default function Login() {
             <section className="stack">
               <h2>What kind of food do you like?</h2>
               <p className="muted small">
-                Pick 2 to {MAX_PREFS}. Just a general lead: your classmates will see these, and we'll use them to match tastes.
+                Pick 2 to {MAX_PREFS}. These come from what's actually on the UCSD dining menus. They're just a lead: your
+                classmates will see them, and we'll use them to match tastes.
               </p>
               <div className="chips">
                 {PREFS.map((p) => (
@@ -150,6 +160,19 @@ export default function Login() {
                   </button>
                 ))}
               </div>
+              {prefs.length > 0 && (
+                <div className="stack flavor-examples">
+                  {prefs.map((p) => {
+                    const ex = examplesFor(p);
+                    return (
+                      <p key={p} className="small">
+                        <strong>{p}</strong>
+                        <span className="muted">{ex.length ? ` · like ${ex.join(", ")}` : ""}</span>
+                      </p>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
             <section className="stack">
@@ -223,6 +246,11 @@ export default function Login() {
               </button>
             </div>
             {seedMsg && <p className="small">{seedMsg}</p>}
+            <div>
+              <Link className="btn btn-small" to="/results">
+                View demo results
+              </Link>
+            </div>
           </div>
         </details>
       </main>
