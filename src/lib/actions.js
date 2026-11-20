@@ -167,3 +167,55 @@ export function toggleUpvote(reviewId, uid, hasUpvoted) {
     upvotes: hasUpvoted ? arrayRemove(uid) : arrayUnion(uid),
   });
 }
+
+// ---- Onboarding ----
+// No sign-in for the class prototype: a profile is just a name + food profile.
+// The class is small, so every new person becomes friends with every classmate
+// already on Cravd (both directions). Demo/sample accounts are left out.
+export async function createProfile({ name, prefs, allergens, shareAllergens, classmateIds }) {
+  const ref = doc(collection(db, "users"));
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.set(ref, {
+    name: name.trim(),
+    handle: name.trim().toLowerCase().replace(/[^a-z0-9]+/g, ""),
+    bio: "",
+    photoURL: "",
+    prefs,
+    allergens,
+    shareAllergens,
+    favorites: [],
+    friends: classmateIds,
+    following: [],
+    status: { free: false, zone: "", until: 0 },
+    createdAt: now,
+  });
+  classmateIds.forEach((id) => {
+    batch.update(doc(db, "users", id), { friends: arrayUnion(ref.id) });
+  });
+  await batch.commit();
+  return ref.id;
+}
+
+// ---- Picking a dish together ----
+// For "want to eat?" invites with no dish: after people say yes, each can vote,
+// and anyone in the plan can lock a dish in.
+
+export function voteDish(inviteId, uid, itemId) {
+  return updateDoc(doc(db, "invites", inviteId), { [`votes.${uid}`]: itemId });
+}
+
+// ---- Comments on review posts ----
+
+export function addComment({ reviewId, authorId, text }) {
+  return addDoc(collection(db, "comments"), {
+    reviewId,
+    authorId,
+    text: text.trim().slice(0, 500),
+    createdAt: Date.now(),
+  });
+}
+
+export function deleteComment(commentId) {
+  return deleteDoc(doc(db, "comments", commentId));
+}

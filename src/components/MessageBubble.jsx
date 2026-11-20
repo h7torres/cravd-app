@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useData } from "../context/DataContext";
-import { clockTime, isLive } from "../lib/helpers";
+import { clockTime } from "../lib/helpers";
 import DishThumb from "./DishThumb";
 import InviteMessageCard from "./InviteMessageCard";
 
@@ -12,7 +12,7 @@ export default function MessageBubble({ message, now, onCounter, onDecideCounter
   const senderName = usersById[message.senderId]?.name || "Friend";
   const counterTime = Number(message.proposedFor);
   const canAcceptCounter = !mine && inv?.fromId === me.id &&
-    message.counterStatus === "pending" && isLive(inv, now) && counterTime > now;
+    message.counterStatus === "pending" && inv?.status === "open" && counterTime > now;
 
   return (
     <div className={`message-bubble-wrap ${mine ? "message-mine" : "message-theirs"}`}>

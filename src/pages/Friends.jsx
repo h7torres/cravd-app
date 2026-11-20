@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useData } from "../context/DataContext";
 import { acceptFriendRequest, cancelFriendRequest } from "../lib/actions";
-import { arr, handleOf, isFree, joinNames, mutualFriends, useNow } from "../lib/helpers";
+import { arr, handleOf, isFree, joinNames, mutualFriends, sharedPrefs, useNow } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 import { FollowButton, FriendButton } from "../components/RelationshipButtons";
 
@@ -33,17 +33,18 @@ export default function Friends() {
   const following = followingIds.map((id) => usersById[id]).filter(Boolean).sort(nameSort);
   const normalized = query.trim().toLowerCase().replace(/^@/, "");
   const findable = users
-    .filter((u) => u.id !== me.id && !friendIds.includes(u.id))
+    .filter((u) => u.id !== me.id && !friendIds.includes(u.id) && !u.demo)
     .sort(nameSort);
+  // Search everyone (including existing friends); suggestions only show non-friends
   const searchResults = normalized
-    ? findable.filter((u) => `${u.name || ""} ${handleOf(u)}`.toLowerCase().includes(normalized))
+    ? users.filter((u) => u.id !== me.id).sort(nameSort).filter((u) => `${u.name || ""} ${handleOf(u)}`.toLowerCase().includes(normalized))
     : [];
 
   const suggested = findable
     .map((u) => ({
       u,
       mutuals: mutualFriends(me, u).map((id) => usersById[id]?.name).filter(Boolean),
-      taste: arr(u.prefs).filter((p) => arr(me.prefs).includes(p)),
+      taste: sharedPrefs(me, u),
     }))
     .sort((a, b) =>
       b.mutuals.length - a.mutuals.length ||
@@ -106,7 +107,7 @@ export default function Friends() {
                 key={f.id}
                 user={f}
                 now={now}
-                sub={isFree(f, now) ? `Free near ${f.status.zone}` : `@${handleOf(f)}`}
+                sub={isFree(f, now) ? `Free near ${f.status.zone}` : sharedPrefs(me, f).length ? `You both like ${sharedPrefs(me, f).slice(0, 3).join(", ")}` : `@${handleOf(f)}`}
               >
                 <Link className="btn btn-small" to={`/invite/new?to=${f.id}`}>Invite</Link>
               </UserRow>

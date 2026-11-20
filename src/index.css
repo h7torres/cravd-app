@@ -578,3 +578,222 @@ label.check input {
 .invite-reply-picker .chip,
 .invite-reply-picker .btn { min-height: 44px; }
 .invite-reply-picker input { width: 100%; min-width: 0; min-height: 44px; }
+
+/* Onboarding & allergens */
+.chip-warn-on {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+
+.allergy-warn {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c0392b;
+}
+
+details summary {
+  cursor: pointer;
+}
+
+.pick-voted {
+  border-color: var(--ink);
+}
+
+/* Review posts (collab-post style) */
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 12px;
+  overflow: hidden;
+}
+
+.post > :not(.post-photo) {
+  margin-left: 14px;
+  margin-right: 14px;
+}
+
+.post-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.avatar-stack {
+  display: inline-flex;
+}
+
+.avatar-stack .avatar + .avatar {
+  margin-left: -10px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.post-names {
+  font-size: 14px;
+}
+
+.post-dish {
+  display: block;
+  text-decoration: none;
+}
+
+.post-photo {
+  display: block;
+}
+
+.post-photo img {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+}
+
+.post-photo .dish-thumb {
+  border-radius: 0;
+  height: 200px !important;
+  font-size: 80px !important;
+}
+
+.post-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.icon-button.is-liked {
+  color: var(--accent);
+}
+
+.name-button {
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.name-button.is-open {
+  color: var(--accent);
+}
+
+.name-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.post-captions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.post-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comment-form input {
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.comment-delete {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.chip-points {
+  font-weight: 700;
+  color: #8a5a00;
+  background: #fff4d6;
+  border-color: transparent;
+}
+
+.send-bar {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+/* Thumbs-up like with a pop, like Facebook's */
+.like-button {
+  width: auto;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.like-button.is-liked {
+  color: #2f6fdf;
+}
+
+.thumb {
+  display: inline-flex;
+}
+
+.thumb.pop {
+  animation: thumb-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes thumb-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  35% {
+    transform: scale(1.45) rotate(-14deg);
+  }
+  70% {
+    transform: scale(0.9) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb.pop {
+    animation: none;
+  }
+}
+
+.photo-credit {
+  align-self: flex-end;
+  margin-top: -6px;
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.demo-tag {
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: default;
+}

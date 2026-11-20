@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
-import { publishMealReview, saveDraftPart, saveDraftPhoto, setInviteItem, skipReview, startMeal } from "../lib/actions";
-import { compressImage, downIds, joinNames, participants, useNow, whenLabel } from "../lib/helpers";
+import { publishMealReview, saveDraftPart, saveDraftPhoto, setInviteItem, skipReview, voteDish } from "../lib/actions";
+import { allergyConflicts, arr, compressImage, downIds, groupPicks, joinNames, participants, useNow, whenLabel } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 import DishThumb from "../components/DishThumb";
 
@@ -46,7 +46,6 @@ export default function Meal() {
   const parts = invite.draft?.parts || {};
   const myText = draft ?? parts[me.id] ?? "";
   const allParts = { ...parts, [me.id]: myText };
-  const writtenCount = Object.values(allParts).filter((t) => t?.trim()).length;
   const sortedItems = [...items].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
   async function run(fn) {
@@ -109,12 +108,12 @@ export default function Meal() {
           </div>
         )}
         <p className="muted">
-          {invite.reviewId ? "You reviewed this together." : "No review, and that's fine. The meal still counts."}
+          {invite.reviewId ? "You posted this together." : "No post, and that's fine. The meal still counts."}
         </p>
         {invite.reviewId && item && (
           <div>
             <Link className="btn btn-primary" to={`/items/${item.id}`}>
-              See the review
+              See the post
             </Link>
           </div>
         )}
@@ -122,8 +121,11 @@ export default function Meal() {
     );
   }
 
-  if (invite.status === "open") {
-    const hasDown = downIds(invite).length > 0;
+  const hasDown = downIds(invite).length > 0;
+  const composing = invite.status === "eating" || (invite.status === "open" && hasDown && item);
+
+  // ---- Waiting for a yes, or picking a dish together ----
+  if (!composing) {
     return (
       <div className="stack">
         <h1>Eating with {otherNames}</h1>
@@ -139,46 +141,63 @@ export default function Meal() {
           </p>
           {invite.note && <p className="muted">“{invite.note}”</p>}
         </div>
-        <p className="muted small">
-          When you're sitting down together, start the meal. You'll be asked for a photo and a quick review, or you can skip it.
-        </p>
-        <button className="btn btn-primary btn-block" disabled={!hasDown || busy} onClick={() => run(() => startMeal(invite.id))}>
-          We're sitting down
-        </button>
-        {!hasDown && <p className="muted small">Nobody has said they're down yet.</p>}
+
+        {!hasDown && <p className="muted small card">Waiting for someone to say yes.</p>}
+        {hasDown && !item && (
+          <PickTogether invite={invite} people={people.map((id) => usersById[id]).filter(Boolean)} busy={busy} run={run} />
+        )}
         {error && <p className="error">{error}</p>}
       </div>
     );
   }
 
-  // status === "eating": collaborative review
+  // ---- Accepted with a dish: post the meal together ----
+  const missingTakes = people.filter((id) => !allParts[id]?.trim()).map((id) => (id === me.id ? "you" : usersById[id]?.name));
+  const hasPhoto = Boolean(invite.draft?.photo);
+  const ready = hasPhoto && missingTakes.length === 0 && Boolean(invite.itemId);
+
   return (
     <div className="stack">
-      <h1>Eating with {otherNames}</h1>
+      <h1>Post your meal with {otherNames}</h1>
+
+      <div className="card row">
+        <DishThumb item={item} size={48} />
+        <span className="grow">
+          {item ? (
+            <>
+              <strong>{item.name}</strong>
+              <span className="block muted small">{item.diningHall}</span>
+            </>
+          ) : (
+            <select value="" onChange={(e) => run(() => setInviteItem(invite.id, e.target.value))}>
+              <option value="">What did you get?</option>
+              {sortedItems.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.emoji} {i.name} · {i.diningHall}
+                </option>
+              ))}
+            </select>
+          )}
+        </span>
+        {item && invite.status === "open" && (
+          <button className="btn-link" disabled={busy} onClick={() => run(() => setInviteItem(invite.id, ""))}>
+            Change
+          </button>
+        )}
+      </div>
 
       <section className="stack">
-        <h2>What did you get?</h2>
-        <select value={invite.itemId || ""} onChange={(e) => run(() => setInviteItem(invite.id, e.target.value))}>
-          <option value="">Pick a dish</option>
-          {sortedItems.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.emoji} {i.name} · {i.diningHall}
-            </option>
-          ))}
-        </select>
-      </section>
-
-      <section className="stack">
-        <h2>Photo</h2>
-        {invite.draft?.photo && <img className="review-photo" src={invite.draft.photo} alt="" />}
+        <h2>1. Add one photo</h2>
+        <p className="muted small">The food, you, or both of you.</p>
+        {hasPhoto && <img className="review-photo" src={invite.draft.photo} alt="" />}
         <label className="photo-drop">
-          {invite.draft?.photo ? "Retake photo" : "📸 Take a photo of the food, and of you if you want"}
-          <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} />
+          {hasPhoto ? "Change photo" : "📸 Upload a photo"}
+          <input type="file" accept="image/*" onChange={handlePhoto} />
         </label>
       </section>
 
       <section className="stack">
-        <h2>Your take</h2>
+        <h2>2. Your take</h2>
         <textarea
           placeholder="What did you think?"
           value={myText}
@@ -189,14 +208,14 @@ export default function Meal() {
         />
         <div className="row">
           <button className="btn btn-small" disabled={busy || draft === null} onClick={saveMine}>
-            Save my part
+            Save my take
           </button>
           {saved && <span className="success">Saved</span>}
         </div>
       </section>
 
       <section className="stack">
-        <h2>Their take</h2>
+        <h2>{others.length === 1 ? `${others[0].name}'s take` : "Their takes"}</h2>
         {others.map((u) => (
           <div key={u.id} className="review-part card">
             <Avatar user={u} size={28} />
@@ -212,20 +231,113 @@ export default function Meal() {
 
       {isOwner ? (
         <div className="stack">
-          <button className="btn btn-primary btn-block" disabled={busy || !invite.itemId || writtenCount === 0} onClick={publish}>
-            Publish review
+          <button className="btn btn-primary btn-block" disabled={busy || !ready} onClick={publish}>
+            Post together
           </button>
-          {!invite.itemId && <p className="muted small">Pick the dish before publishing.</p>}
-          <p className="muted small">It'll show up on the profile of everyone who wrote a part.</p>
+          {!ready && (
+            <p className="muted small">
+              Still needed: {[!hasPhoto && "a photo", missingTakes.length > 0 && `a take from ${joinNames(missingTakes)}`].filter(Boolean).join(" and ")}.
+            </p>
+          )}
+          <p className="muted small">It shows up on everyone's profile and adds a meal point for each of you.</p>
           <button className="btn-link" disabled={busy} onClick={skip}>
-            Skip the review, we just ate
+            Skip the post, we just ate
           </button>
         </div>
       ) : (
         <p className="muted small card">
-          {owner?.name || "The inviter"} publishes this once everyone's written their part. It'll show up on both your profiles.
+          {owner?.name || "The inviter"} posts this once everyone has written their take. It'll show up on both your
+          profiles and add a meal point for each of you.
         </p>
       )}
     </div>
+  );
+}
+
+// For "want to eat?" invites: once people say yes, everyone sees dishes that fit
+// the whole group, votes, and anyone can lock one in. Dishes that clash with
+// anyone's allergies are left out without saying whose.
+function PickTogether({ invite, people, busy, run }) {
+  const { me, items, itemsById, usersById } = useData();
+  const votes = invite.votes || {};
+  const picks = groupPicks(people, items);
+  const safeItems = items
+    .filter((i) => people.every((p) => allergyConflicts(i, p).length === 0))
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const myVote = votes[me.id];
+
+  // Dishes people voted for that aren't already in the suggestions
+  const votedExtra = [...new Set(Object.values(votes))]
+    .filter((id) => !picks.some((p) => p.item.id === id))
+    .map((id) => itemsById[id])
+    .filter(Boolean)
+    .map((item) => ({ item, fans: [], matches: [] }));
+
+  const voterNames = (itemId) =>
+    Object.entries(votes)
+      .filter(([, v]) => v === itemId)
+      .map(([uid]) => (uid === me.id ? "you" : usersById[uid]?.name))
+      .filter(Boolean);
+
+  function reason({ fans, matches }) {
+    const bits = [];
+    if (fans.length) bits.push(`${joinNames(fans.map((f) => (f.id === me.id ? "you" : f.name)))} love${fans.length === 1 && fans[0].id !== me.id ? "s" : ""} it`);
+    const tasteNames = matches.filter((m) => !fans.includes(m.p)).map((m) => (m.p.id === me.id ? "you" : m.p.name));
+    if (tasteNames.length) bits.push(`fits ${joinNames(tasteNames)}`);
+    return bits.join(" · ");
+  }
+
+  return (
+    <section className="stack">
+      <h2>Pick a dish together</h2>
+      <p className="muted small">
+        Based on everyone's favorites and food profiles. Anything that clashes with someone's allergies is left out.
+      </p>
+
+      {[...picks, ...votedExtra].map((pick) => {
+        const voters = voterNames(pick.item.id);
+        return (
+          <div key={pick.item.id} className={`card row ${myVote === pick.item.id ? "pick-voted" : ""}`}>
+            <DishThumb item={pick.item} size={48} />
+            <span className="grow">
+              <strong>{pick.item.name}</strong>
+              <span className="block muted small">{pick.item.diningHall}</span>
+              {reason(pick) && <span className="block small">{reason(pick)}</span>}
+              {voters.length > 0 && <span className="block signal">Voted: {joinNames(voters)}</span>}
+            </span>
+            <span className="stack" style={{ gap: 6 }}>
+              <button
+                className={`btn btn-small ${myVote === pick.item.id ? "btn-on" : ""}`}
+                disabled={busy}
+                onClick={() => run(() => voteDish(invite.id, me.id, pick.item.id))}
+              >
+                {myVote === pick.item.id ? "Voted" : "Vote"}
+              </button>
+              <button className="btn btn-small btn-primary" disabled={busy} onClick={() => run(() => setInviteItem(invite.id, pick.item.id))}>
+                Lock in
+              </button>
+            </span>
+          </div>
+        );
+      })}
+
+      {picks.length === 0 && <p className="muted small">No strong matches yet, so pick anything below.</p>}
+
+      <select
+        value=""
+        disabled={busy}
+        onChange={(e) => e.target.value && run(() => voteDish(invite.id, me.id, e.target.value))}
+      >
+        <option value="">Vote for something else…</option>
+        {safeItems.map((i) => (
+          <option key={i.id} value={i.id}>
+            {i.emoji} {i.name} · {i.diningHall}
+          </option>
+        ))}
+      </select>
+      {arr(Object.keys(votes)).length > 0 && (
+        <p className="muted small">Anyone in the plan can lock in a dish once you agree.</p>
+      )}
+    </section>
   );
 }

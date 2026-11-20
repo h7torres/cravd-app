@@ -51,6 +51,11 @@ export default function InviteCard({ invite, now, mode }) {
         </Link>
       )}
 
+      {!item && (
+        <p className="small">
+          <strong>Want to eat?</strong> <span className="muted">Pick a dish together once someone says yes.</span>
+        </p>
+      )}
       {invite.note && <p>“{invite.note}”</p>}
       {answered.length > 0 && <p className="muted small">{answered.join(" · ")}</p>}
 

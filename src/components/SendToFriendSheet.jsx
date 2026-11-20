@@ -38,6 +38,8 @@ export default function SendToFriendSheet({ item = null, lockedFriendId = null, 
     if (!recipientIds.length) return setError("Pick at least one friend.");
     if (mode === "dish" && !itemId) return setError("Pick a dish first.");
     const plannedMs = new Date(plannedFor).getTime();
+    // Runs in a click handler, not during render.
+    // eslint-disable-next-line react-hooks/purity
     if (mode === "invite" && urgency === "planned" && !(plannedMs > Date.now())) return setError("Pick a future time.");
     setBusy(true);
     try {

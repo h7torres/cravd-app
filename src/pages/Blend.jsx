@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useData } from "../context/DataContext";
-import { arr, sharedTags } from "../lib/helpers";
+import { allergyConflicts, arr, sharedTags } from "../lib/helpers";
 import Avatar from "../components/Avatar";
 import DishThumb from "../components/DishThumb";
 
@@ -27,7 +27,7 @@ function blend(a, b, items) {
 
       return { item, score, reason, works };
     })
-    .filter((r) => r.works)
+    .filter((r) => r.works && !allergyConflicts(r.item, a).length && !allergyConflicts(r.item, b).length)
     .sort((x, y) => y.score - x.score)
     .slice(0, 6);
 }

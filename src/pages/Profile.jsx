@@ -13,8 +13,11 @@ import {
   joinNames,
   mutualFriends,
   participants,
+  ALLERGENS,
+  MAX_PREFS,
   PREFS,
   reviewKeywords,
+  sharedPrefs as sharedPrefsOf,
   timeAgo,
   useNow,
 } from "../lib/helpers";
@@ -71,8 +74,12 @@ export default function Profile() {
   const since = user.createdAt
     ? new Date(user.createdAt).toLocaleDateString([], { month: "short", year: "numeric" })
     : null;
-  const sharedPrefs = isMe ? [] : arr(user.prefs).filter((p) => arr(me.prefs).includes(p));
+  const sharedPrefs = isMe ? [] : sharedPrefsOf(me, user);
+  // Allergies are private unless the person chose to share them with friends
+  const showAllergens = arr(user.allergens).length > 0 && (isMe || (isFriend && user.shareAllergens));
   const keywords = reviewKeywords(user.id, reviews, itemsById);
+  // One point for every meal posted together with someone
+  const points = userReviews.filter((r) => arr(r.authorIds).length >= 2 && !r.demoActivity).length;
   const photoReviews = userReviews.filter((r) => r.photo);
   const visibleReviews = showAll ? userReviews : userReviews.slice(0, 3);
 
@@ -82,9 +89,10 @@ export default function Profile() {
         <Avatar user={user} size={88} now={showPrivate ? now : undefined} />
         <h1>{user.name}</h1>
         <p className="muted">@{handleOf(user)}</p>
+        <span className="chip chip-points">⭐ {plural(points, "meal point")}</span>
         {user.bio && <p>{user.bio}</p>}
         <p className="muted small">
-          {[since && `On Cravd since ${since}`, plural(userReviews.length, "review"), plural(meals.length, "shared meal")]
+          {[since && `On Cravd since ${since}`, plural(meals.length, "shared meal")]
             .filter(Boolean)
             .join(" · ")}
         </p>
@@ -99,8 +107,19 @@ export default function Profile() {
           </div>
         )}
 
+        {sharedPrefs.length > 0 && (
+          <p className="signal">You both like {joinNames(sharedPrefs)}</p>
+        )}
+
         {keywords.length > 0 && (
           <p className="small muted">Usually reviews: {keywords.join(", ")}</p>
+        )}
+
+        {showAllergens && (
+          <p className="small allergy-warn">
+            Allergies: {arr(user.allergens).join(", ")}
+            {isMe && <span className="muted"> · {user.shareAllergens ? "visible to friends" : "only you can see this"}</span>}
+          </p>
         )}
 
         {!isMe && (
@@ -247,9 +266,12 @@ function EditProfile({ me, onDone }) {
   const [name, setName] = useState(me.name || "");
   const [handle, setHandle] = useState(me.handle || "");
   const [bio, setBio] = useState(me.bio || "");
-  const [prefs, setPrefs] = useState(arr(me.prefs));
+  // Older profiles may have keywords from before the flavor list was simplified
+  const [prefs, setPrefs] = useState(arr(me.prefs).filter((p) => PREFS.includes(p)));
   const [photoURL, setPhotoURL] = useState(me.photoURL || "");
   const [visibility, setVisibility] = useState(me.visibility || "friends");
+  const [allergens, setAllergens] = useState(arr(me.allergens));
+  const [shareAllergens, setShareAllergens] = useState(Boolean(me.shareAllergens));
   const [saving, setSaving] = useState(false);
 
   async function handlePhoto(e) {
@@ -258,7 +280,13 @@ function EditProfile({ me, onDone }) {
   }
 
   function togglePref(p) {
-    setPrefs((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    setPrefs((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : prev.length < MAX_PREFS ? [...prev, p] : prev
+    );
+  }
+
+  function toggleAllergen(a) {
+    setAllergens((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
   }
 
   async function save() {
@@ -270,6 +298,8 @@ function EditProfile({ me, onDone }) {
       prefs,
       photoURL,
       visibility,
+      allergens,
+      shareAllergens,
     });
     onDone();
   }
@@ -297,7 +327,7 @@ function EditProfile({ me, onDone }) {
         <textarea value={bio} maxLength={140} onChange={(e) => setBio(e.target.value)} />
       </label>
       <div className="stack small">
-        Food preferences
+        Food you like (pick 2 to {MAX_PREFS})
         <div className="chips">
           {PREFS.map((p) => (
             <button key={p} className={`chip ${prefs.includes(p) ? "chip-on" : ""}`} onClick={() => togglePref(p)}>
@@ -305,6 +335,20 @@ function EditProfile({ me, onDone }) {
             </button>
           ))}
         </div>
+      </div>
+      <div className="stack small">
+        Allergies
+        <div className="chips">
+          {ALLERGENS.map((a) => (
+            <button key={a} className={`chip ${allergens.includes(a) ? "chip-warn-on" : ""}`} onClick={() => toggleAllergen(a)}>
+              {a}
+            </button>
+          ))}
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={shareAllergens} onChange={(e) => setShareAllergens(e.target.checked)} />
+          Let my friends see my allergies
+        </label>
       </div>
       <label className="stack small">
         Who can see my favorites

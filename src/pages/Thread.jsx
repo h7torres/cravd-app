@@ -31,7 +31,7 @@ export default function Thread() {
   const readRequestAt = useRef(0);
 
   useEffect(() => {
-    if (!friend) return;
+    if (!friendId) return;
     const stopThread = subscribeThread(threadId, setThread, (err) => {
       console.error(err);
       setError("Unable to load this chat. Check Firestore permissions.");
@@ -45,7 +45,7 @@ export default function Thread() {
       setError("Unable to load messages. Check Firestore permissions.");
     });
     return () => { stopThread(); stopMessages(); };
-  }, [threadId, friendId, friend?.id]);
+  }, [threadId, friendId]);
 
   const virtualInvites = friend ? inviteMessagesForPair(invites, me.id, friend.id) : [];
   const allMessages = combineMessages(messages, virtualInvites);

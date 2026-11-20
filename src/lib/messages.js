@@ -169,7 +169,9 @@ export async function decideCounter({ inviteId, messageId, currentUserId, accept
     if (inv.fromId !== currentUserId || msg.type !== "counter" || msg.inviteId !== inviteId ||
         !arr(inv.toIds).includes(msg.senderId)) throw new Error("You can't respond to this suggestion.");
     if (msg.counterStatus !== "pending") throw new Error("This suggestion has already been answered.");
-    if (inv.status !== "open" || inv.expiresAt <= Date.now()) throw new Error("The invite is no longer available.");
+    // A pending suggestion can still be accepted after the original time passes:
+    // accepting sets a new meet time and expiry.
+    if (inv.status !== "open") throw new Error("The invite is no longer available.");
     if (accept) {
       const proposedFor = timestamp(msg.proposedFor);
       if (proposedFor <= Date.now()) throw new Error("That time has passed. Ask for another time.");
